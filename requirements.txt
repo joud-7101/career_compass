@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+streamlit
+requests
+
+langgraph
+langchain
+langchain-openai
+
+sqlmodel
+pydantic
+pydantic-settings
+
+python-dotenv
+jobspy
