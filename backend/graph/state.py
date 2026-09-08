@@ -13,7 +13,7 @@ AgentName = Literal[
     "freelance"
 ]
 
-
+# User information shared between agents
 class UserProfile(TypedDict, total=False):
     name: str
     education: str
