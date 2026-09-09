@@ -16,14 +16,14 @@ llm_with_tools = llm.bind_tools([search_jobs])
 
 
 def job_agent(state: CareerState):
-
     user_profile = state.get("user_profile", {})
+    query = state.get("query", "")
 
     prompt = f"""
 You are the Job Agent in Career Compass.
 
-Your job is to help the user find and evaluate
-job opportunities.
+Your job is to find and evaluate real job opportunities
+that match the user's request and profile.
 
 USER PROFILE
 ------------
@@ -36,13 +36,20 @@ Location: {user_profile.get("location", "")}
 
 USER REQUEST
 ------------
-{state.get("query", "")}
+{query}
 
-Use the available job search tool when job opportunities
-are needed.
+INSTRUCTIONS
+------------
+1. Identify the job role or opportunity the user is asking for.
+2. Use the job search tool to find real job listings.
+3. Use a concise job-related search term, such as
+   "Software Engineer", "AI Engineer", or "Data Scientist".
+4. Use the user's location when available.
+5. Do not search using only the user's skills.
+6. After receiving the job results, analyze them against
+   the user's profile.
 
-After receiving the search results, analyze them and return:
-
+Return:
 1. Suitable job opportunities
 2. Why each job matches the user
 3. Important skill gaps
@@ -51,12 +58,9 @@ After receiving the search results, analyze them and return:
 
     messages = [HumanMessage(content=prompt)]
 
-    # Let the LLM decide whether to use the job search tool
     response = llm_with_tools.invoke(messages)
 
-    # Handle tool calls
     if response.tool_calls:
-
         messages.append(response)
 
         for tool_call in response.tool_calls:
@@ -69,7 +73,6 @@ After receiving the search results, analyze them and return:
                 )
             )
 
-        # Let the LLM analyze the tool results
         final_response = llm_with_tools.invoke(messages)
 
     else:
