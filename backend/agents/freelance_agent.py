@@ -7,7 +7,7 @@ from backend.graph.state import CareerState
 from backend.config import settings
 
 llm = ChatOpenAI(
-    model="gpt-4.1-mini",
+    model="gpt-5.4-mini",
     temperature=0,
     api_key=settings.openai_api_key
 )

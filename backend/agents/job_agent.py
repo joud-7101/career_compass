@@ -7,7 +7,7 @@ from backend.tools.job_search import search_jobs
 
 
 llm = ChatOpenAI(
-    model="gpt-4.1-mini",
+    model="gpt-5.4-mini",
     temperature=0,
     api_key=settings.openai_api_key
 )
