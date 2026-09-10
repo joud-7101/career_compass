@@ -1,33 +1,29 @@
 from langchain_openai import ChatOpenAI
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage
 
 from backend.graph.state import CareerState
-
-
 from backend.config import settings
 
+
 llm = ChatOpenAI(
-    model="gpt-4.1-mini",
+    model="gpt-5.4-mini", 
     temperature=0,
     api_key=settings.openai_api_key
 )
 
 
-
-
-
 def certification_agent(state: CareerState):
+
+    user_profile = state.get("user_profile", {})
 
     prompt = f"""
 You are the Certification Agent for Career Compass.
 
 USER PROFILE
 ------------
-Education: {state.get("education", "")}
-Experience: {state.get("experience", [])}
-Skills: {state.get("skills", [])}
-Interests: {state.get("interests", [])}
+Education: {user_profile.get("education", "")}
+Experience: {user_profile.get("experience", [])}
+Skills: {user_profile.get("skills", [])}
+Interests: {user_profile.get("interests", [])}
 
 USER REQUEST
 ------------
@@ -56,4 +52,5 @@ Return:
 
     return {
         "certification_analysis": response.content
+
     }
