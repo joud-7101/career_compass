@@ -5,6 +5,7 @@ from backend.graph.state import CareerState
 from backend.config import settings
 from backend.tools.job_search import search_jobs
 from backend.tools.onet import get_occupation_information
+from backend.tools.resume import get_required_skills
 
 
 llm = ChatOpenAI(
@@ -15,7 +16,8 @@ llm = ChatOpenAI(
 
 llm_with_tools = llm.bind_tools([
     search_jobs,
-    get_occupation_information
+    get_occupation_information,
+    get_required_skills
 ])
 
 
@@ -55,24 +57,33 @@ INSTRUCTIONS
    essential skills, and technology information
    for the identified job role.
 
-5. Use the user's location when available.
+5. Use the Resume tool to retrieve the
+   required skills associated with the identified
+   job title.
 
-6. Do not search using only the user's skills.
+6. Use the user's location when available.
 
-7. After receiving the job and O*NET results,
-   analyze them against the user's profile,
-   including skill matches and skill gaps.
+7. Do not search using only the user's skills.
+
+8. Use Resume information only when the matched title
+   is clearly relevant to the requested role.
+
+9. Analyze the job, O*NET, and Resume results against
+   the user's profile, including skill matches and gaps.
+
+10. Use O*NET and Resume information to support
+    your recommendations.
 
 Return:
 1. Suitable job opportunities
 2. Why each job matches the user
 3. Important skill gaps
 4. Recommended next steps
-5. Use O*NET information to support the
-   skill-gap analysis and recommendations."""
+5. Use O*NET and Resume information to support
+   the skill-gap analysis and recommendations."""
 
     messages = [HumanMessage(content=prompt)]
-
+    
     response = llm_with_tools.invoke(messages)
 
     if response.tool_calls:
@@ -87,6 +98,11 @@ Return:
 
             elif tool_call["name"] == "get_occupation_information":
                 tool_result = get_occupation_information.invoke(
+                    tool_call["args"]
+                )
+
+            elif tool_call["name"] == "get_required_skills":
+                tool_result = get_required_skills.invoke(
                     tool_call["args"]
                 )
 
