@@ -1,0 +1,65 @@
+/* Home-only styling. Palette and typography follow the approved CareerCompass design. */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+:root{--cc-primary:#0B2E4F;--cc-secondary:#1597E5;--cc-accent:#39C6F4;--cc-bg:#F7F9FC;--cc-surface:#FFFFFF;--cc-text:#102A43;--cc-muted:#627D98;--cc-border:#D9E2EC}
+[data-testid="stApp"]{background:var(--cc-surface);color:var(--cc-text);font-family:'IBM Plex Sans',Arial,sans-serif}
+.stMainBlockContainer{max-width:1240px;padding:2rem 2.5rem 3rem}
+h1,h2,h3,h4,p,button,a{font-family:'IBM Plex Sans',Arial,sans-serif!important}
+h1,h2,h3,h4{color:var(--cc-primary);font-weight:600!important;letter-spacing:-.5px}
+p{color:var(--cc-muted);line-height:1.7}
+.st-key-home_nav{border-bottom:1px solid var(--cc-border);padding-bottom:20px}
+.cc-brand{display:flex;align-items:center;gap:8px;font-size:15px;line-height:1.02;color:var(--cc-primary)!important;text-decoration:none!important;white-space:nowrap}
+.cc-brand b{font-weight:700}.cc-brand-icon{font-size:45px;color:var(--cc-secondary);line-height:1}
+.cc-navlinks{display:flex;align-items:center;gap:30px}.cc-navlinks a{font-size:14px;color:var(--cc-muted);text-decoration:none}.cc-navlinks a.active{color:var(--cc-primary);font-weight:600}.cc-navlinks a:hover{color:var(--cc-secondary)}
+.st-key-home_hero{padding:58px 0 64px}.cc-badge{display:inline-flex;align-items:center;gap:8px;border-radius:25px;background:#edf7fd;color:var(--cc-primary);padding:5px 12px;font-size:11px;font-weight:500}.cc-badge span{height:7px;width:7px;background:var(--cc-secondary);border-radius:50%}
+.cc-hero-title{font-size:clamp(35px,4vw,49px)!important;line-height:1.13!important;letter-spacing:-1.5px;margin:12px 0 3px!important;max-width:570px}
+.cc-hero-copy{font-size:17px;line-height:1.75;margin:0 0 12px;max-width:550px}
+.compass-hero{width:100%;max-width:520px;display:block;margin:20px auto}
+.cc-outline-link{display:inline-flex;align-items:center;min-height:42px;padding:8px 20px;border:1px solid var(--cc-border);border-radius:7px;color:var(--cc-primary)!important;font-size:14px;font-weight:500;text-decoration:none!important;background:white}
+.cc-outline-link:hover{border-color:var(--cc-secondary);background:var(--cc-bg)}
+[class*="st-key-home_"] button[kind="primary"],.st-key-nav_start button,.st-key-hero_start button,.st-key-bottom_start button{background:var(--cc-secondary)!important;color:var(--cc-primary)!important;border:1px solid var(--cc-secondary)!important;border-radius:7px;font-weight:600}
+[class*="st-key-home_"] button[kind="tertiary"]{color:var(--cc-primary);font-weight:500}
+.cc-section-heading{text-align:center;margin:0 0 30px;scroll-margin-top:30px}.cc-section-heading h2{font-size:34px;line-height:1.2;margin:0 0 12px}.cc-section-heading p{font-size:17px;margin:0}
+.st-key-home_services,.st-key-home_about{background:var(--cc-bg);padding:52px 28px;border-radius:8px}.st-key-home_how{padding:60px 12px}
+[class*="st-key-home_service_"],[class*="st-key-home_benefit_"]{background:var(--cc-surface);border-color:var(--cc-border)!important;border-radius:12px!important;padding:26px!important;box-shadow:0 1px 2px #0B2E4F05}
+[class*="st-key-home_service_"] h3{font-size:23px;margin-bottom:2px}[class*="st-key-home_service_"] p{font-size:15px;line-height:1.8}
+[class*="st-key-home_service_"] [data-testid="stIconMaterial"]{color:var(--cc-secondary);font-size:27px}
+[class*="st-key-home_service_"] [data-testid="stMarkdownContainer"]:first-child>p:has([data-testid="stIconMaterial"]){background:#edf7fd;width:52px;height:52px;border-radius:10px;display:grid;place-items:center}
+[class*="st-key-home_step_"] [data-testid="stIconMaterial"]{background:var(--cc-primary);color:white;font-size:33px;padding:23px;border-radius:17px}
+[class*="st-key-home_step_"] h3{font-size:21px}[class*="st-key-home_step_"] p{font-size:15px}[class*="st-key-home_step_"] [data-testid="stCaptionContainer"] p{color:var(--cc-secondary);font-weight:600;font-size:12px;letter-spacing:1px}
+[class*="st-key-home_benefit_"] [data-testid="stIconMaterial"]{color:var(--cc-secondary);font-size:24px}[class*="st-key-home_benefit_"] h4{font-size:17px}[class*="st-key-home_benefit_"] p{font-size:14px}
+.st-key-home_cta{background:var(--cc-primary);border-radius:14px;margin:42px auto;padding:45px 24px;max-width:920px}.st-key-home_cta h2{color:white}.st-key-home_cta p{color:#c3d7e8}.st-key-home_cta button{background:var(--cc-accent)!important;border-color:var(--cc-accent)!important;color:var(--cc-primary)!important}
+.st-key-home_footer{border-top:1px solid var(--cc-border);padding-top:36px}.st-key-home_footer a{color:var(--cc-muted);text-decoration:none;font-size:13px}.st-key-home_footer a:hover{color:var(--cc-secondary)}.st-key-home_footer strong{color:var(--cc-primary)}
+a:focus-visible,button:focus-visible{outline:3px solid var(--cc-accent)!important;outline-offset:3px}
+@media(max-width:640px){.stMainBlockContainer{padding:1.2rem}.st-key-home_hero{padding:35px 0}.cc-navlinks{gap:18px}.cc-hero-title{font-size:36px!important}.st-key-home_services,.st-key-home_about{padding:35px 18px}.st-key-home_how{padding:38px 0}.cc-section-heading h2{font-size:28px}.st-key-home_cta{padding:32px 18px}.compass-hero{max-width:420px}}
+
+/* Keep the native toolbar clear of the page navigation. */
+.stMainBlockContainer{padding-top:5rem}
+[data-testid='stHeader']{background:white;color:var(--cc-primary)}
+button p{color:inherit!important}
+[data-testid='stDialog'] [role='dialog']{background:white;color:var(--cc-text)}
+@media(max-width:640px){.stMainBlockContainer{padding-top:5rem}}
+.cc-section-heading,#home{scroll-margin-top:95px}
+/* مربع أيقونات الخدمات */
+[class*="st-key-service_icon_"] {
+    width: 70px !important;
+    height: 700px;
+    background-color: #EDF5FF;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* توسيط الأيقونة */
+[class*="st-key-service_icon_"] p {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* لون الأيقونة وحجمها */
+[class*="st-key-service_icon_"] span {
+    color: #1597E5 !important;
+    font-size: 40px !important;
+}
