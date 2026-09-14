@@ -13,6 +13,8 @@ AgentName = Literal[
     "freelance"
 ]
 
+
+
 # User information shared between agents
 class UserProfile(TypedDict, total=False):
     name: str
@@ -43,7 +45,21 @@ class CareerState(TypedDict, total=False):
     # -------------------------
 
     requested_agents: list[AgentName]
+     
+    # -------------------------
+    # Certification flow
+    # -------------------------
 
+    certification_recommendations: list[dict]
+
+    selected_certification: str
+    current_level: Literal[
+        "Beginner",
+        "Intermediate",
+        "Advanced"
+    ]
+    exam_date: str
+    
     # -------------------------
     # Agent outputs
     # -------------------------

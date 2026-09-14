@@ -8,7 +8,7 @@ from backend.graph.nodes import (
 )
 
 from backend.agents.job_agent import job_agent
-from backend.agents.certification_agent import certification_agent
+from backend.agents.certification_agent2 import certification_agent
 from backend.agents.freelance_agent import freelance_agent
 
 
