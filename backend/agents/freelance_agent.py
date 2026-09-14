@@ -10,7 +10,7 @@ from backend.tools.freelance.freelance_search import search_freelance_projects
 
 
 llm = ChatOpenAI(
-    model="gpt-4.1-mini",
+    model="gpt-5.4-mini",
     temperature=0,
     api_key=settings.openai_api_key,
 )
