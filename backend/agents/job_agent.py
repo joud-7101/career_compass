@@ -6,7 +6,15 @@ from backend.config import settings
 from backend.tools.job_search import search_jobs
 from backend.tools.onet import get_occupation_information
 from backend.tools.resume import get_required_skills
+from backend.schemas.career import (
+    JobOpportunity,
+    MatchDetails,
+)
+from pydantic import BaseModel, Field
 
+#for the structured output of the job agent
+class JobAgentOutput(BaseModel):
+    jobs: list[JobOpportunity] = Field(default_factory=list)
 
 llm = ChatOpenAI(
     model="gpt-5.4-mini",
@@ -85,6 +93,7 @@ Return:
     messages = [HumanMessage(content=prompt)]
     
     response = llm_with_tools.invoke(messages)
+    structured_llm = llm.with_structured_output(JobAgentOutput)#for structured output of the job agent
 
     if response.tool_calls:
         messages.append(response)
