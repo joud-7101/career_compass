@@ -116,7 +116,7 @@ Return:
                 )
             )
 
-        final_response = llm_with_tools.invoke(messages)
+        final_response = llm.invoke(messages)
 
     else:
         final_response = response
