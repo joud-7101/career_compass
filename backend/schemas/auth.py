@@ -19,4 +19,7 @@ class TokenResponse(BaseModel):
 class UserResponse(BaseModel):
     id: int
     email: EmailStr
-    is_active: bool 
+    is_active: bool
+
+    class Config:
+        from_attributes = True 
