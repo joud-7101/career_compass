@@ -14,15 +14,6 @@ pydantic
 pydantic-settings
 
 python-dotenv
-<<<<<<< HEAD
-numpy==1.26.3
-pandas==2.2.3
 python-jobspy==1.1.82
-datasets
-instructor>=1.17.0
-ragas==0.3.9
-=======
-jobspy
 
 openai
->>>>>>> origin/noha-certification-search

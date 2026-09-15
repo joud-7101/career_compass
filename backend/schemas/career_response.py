@@ -1,0 +1,63 @@
+"""Versioned, frontend-safe contract returned by the career workflow."""
+
+from typing import Literal
+
+from pydantic import BaseModel, Field, HttpUrl
+
+
+SCHEMA_VERSION = "1.0"
+
+
+class MatchDetails(BaseModel):
+    score: int | None = Field(default=None, ge=0, le=100)
+    matching_skills: list[str] = Field(default_factory=list)
+    missing_skills: list[str] = Field(default_factory=list)
+    explanation: str
+
+
+class JobOpportunity(BaseModel):
+    title: str
+    company: str | None = None
+    location: str | None = None
+    url: HttpUrl | None = None
+    employment_type: str | None = None
+    source: str
+    match: MatchDetails
+
+
+class CertificationRecommendation(BaseModel):
+    name: str
+    provider: str
+    exam_code: str | None = None
+    url: HttpUrl | None = None
+    priority: Literal["high", "medium", "low"]# i think we do not have this in our agent
+    match: MatchDetails
+
+
+class FreelanceProject(BaseModel):
+    title: str
+    source: str
+    url: HttpUrl | None = None
+    budget_or_rate: str | None = None
+    difficulty: str | None = None# i think we do not have this in our agent
+    action: Literal["apply", "consider", "skip"]#nore this
+    match: MatchDetails
+
+
+class AgentIssue(BaseModel):
+    agent: Literal["job", "certification", "freelance"]
+    message: str
+    retryable: bool = False
+
+
+class CareerResponse(BaseModel):
+    """One stable response that the API and Streamlit cards can consume."""
+
+    schema_version: Literal["1.0"] = SCHEMA_VERSION
+    request_id: str | None = None
+    final_response: str
+    jobs: list[JobOpportunity] = Field(default_factory=list)
+    certifications: list[CertificationRecommendation] = Field(default_factory=list)
+    freelance_projects: list[FreelanceProject] = Field(default_factory=list)
+    issues: list[AgentIssue] = Field(default_factory=list)
+

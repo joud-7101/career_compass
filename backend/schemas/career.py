@@ -12,12 +12,10 @@ class CareerRequest(BaseModel):
 
 
 class UserProfileRequest(BaseModel):
-
     user_id: str
     name: str
     education: str = ""
     location: str = ""
-
-    skills: list[str] = []
-    experience: list[str] = []
-    interests: list[str] = []
+    skills: list[str] = Field(default_factory=list)
+    experience: list[str] = Field(default_factory=list)
+    interests: list[str] = Field(default_factory=list)
