@@ -1,10 +1,14 @@
-from typing import Annotated
-import operator
-
+from typing import Literal
 from typing_extensions import TypedDict
 
+from backend.schemas.career import (
+    JobOpportunity,
+    CertificationRecommendation,
+    FreelanceProject,
+    AgentIssue,
+)
 
-from typing import TypedDict, Literal
+from backend.schemas.profile import UserProfile
 
 
 AgentName = Literal[
@@ -15,23 +19,27 @@ AgentName = Literal[
 
 
 
-# User information shared between agents
-class UserProfile(TypedDict, total=False):
-    name: str
-    education: str
-    experience: list[str]
-    skills: list[str]
-    interests: list[str]
-    location: str
+# # User information shared between agents
+
+# class CareerState(TypedDict, total=False):
+
+#     user_id: str
+#     query: str
+
+#     user_profile: UserProfile
+
+
+
 
 
 class CareerState(TypedDict, total=False):
 
     # -------------------------
-    # User/session
+    # User / session
     # -------------------------
 
     user_id: str
+    request_id: str
     query: str
 
     # -------------------------
@@ -40,15 +48,18 @@ class CareerState(TypedDict, total=False):
 
     user_profile: UserProfile
 
+
     # -------------------------
     # Orchestrator
     # -------------------------
 
     requested_agents: list[AgentName]
-     
+
     # -------------------------
-    # Certification flow
+    # Certification inputs
     # -------------------------
+
+    selected_certification: str
 
     certification_recommendations: list[dict]
 
@@ -61,15 +72,40 @@ class CareerState(TypedDict, total=False):
     exam_date: str
     
     # -------------------------
-    # Agent outputs
+    # Structured Agent outputs
     # -------------------------
 
-    job_analysis: str
-    certification_analysis: str
-    freelance_analysis: str
+    jobs: list[JobOpportunity]
+    certifications: list[CertificationRecommendation]
+    freelance_projects: list[FreelanceProject]
+        # -------------------------
+    # Errors / warnings
+    # -------------------------
+
+
+
+
+    issues: list[AgentIssue]
 
     # -------------------------
     # Final output
     # -------------------------
+#new archture
+#     final_response: str
 
-    final_response: str
+#     Job Agent
+#     ↓
+# JobOpportunity objects
+#     ↓
+# CareerState.jobs
+#     ↓
+# CareerResponse.jobs
+#     ↓
+# Frontend directly displays cards
+
+#For example, Streamlit can simply do:
+# for job in response.jobs:
+#     st.write(job.title)
+#     st.write(job.company)
+#     st.write(job.match.score)
+#     st.write(job.match.matching_skills)
