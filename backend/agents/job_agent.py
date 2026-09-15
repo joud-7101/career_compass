@@ -4,26 +4,32 @@ from langchain_core.messages import HumanMessage, ToolMessage
 from backend.graph.state import CareerState
 from backend.config import settings
 from backend.tools.job_search import search_jobs
+from backend.tools.onet import get_occupation_information
+from backend.tools.resume import get_required_skills
 
 
 llm = ChatOpenAI(
-    model="gpt-4.1-mini",
+    model="gpt-5.4-mini",
     temperature=0,
     api_key=settings.openai_api_key
 )
 
-llm_with_tools = llm.bind_tools([search_jobs])
+llm_with_tools = llm.bind_tools([
+    search_jobs,
+    get_occupation_information,
+    get_required_skills
+])
 
 
 def job_agent(state: CareerState):
-
     user_profile = state.get("user_profile", {})
+    query = state.get("query", "")
 
     prompt = f"""
 You are the Job Agent in Career Compass.
 
-Your job is to help the user find and evaluate
-job opportunities.
+Your job is to find and evaluate real job opportunities
+that match the user's request and profile.
 
 USER PROFILE
 ------------
@@ -36,31 +42,72 @@ Location: {user_profile.get("location", "")}
 
 USER REQUEST
 ------------
-{state.get("query", "")}
+{query}
 
-Use the available job search tool when job opportunities
-are needed.
+INSTRUCTIONS
+------------
+1. Identify the job role or opportunity the user is asking for.
 
-After receiving the search results, analyze them and return:
+2. Use the job search tool to find real job listings.
 
+3. Use a concise job-related search term, such as
+   "Software Engineer", "AI Engineer", or "Data Scientist".
+
+4. Use the O*NET tool to retrieve occupation,
+   essential skills, and technology information
+   for the identified job role.
+
+5. Use the Resume tool to retrieve the
+   required skills associated with the identified
+   job title.
+
+6. Use the user's location when available.
+
+7. Do not search using only the user's skills.
+
+8. Use Resume information only when the matched title
+   is clearly relevant to the requested role.
+
+9. Analyze the job, O*NET, and Resume results against
+   the user's profile, including skill matches and gaps.
+
+10. Use O*NET and Resume information to support
+    your recommendations.
+
+Return:
 1. Suitable job opportunities
 2. Why each job matches the user
 3. Important skill gaps
 4. Recommended next steps
-"""
+5. Use O*NET and Resume information to support
+   the skill-gap analysis and recommendations."""
 
     messages = [HumanMessage(content=prompt)]
-
-    # Let the LLM decide whether to use the job search tool
+    
     response = llm_with_tools.invoke(messages)
 
-    # Handle tool calls
     if response.tool_calls:
-
         messages.append(response)
 
         for tool_call in response.tool_calls:
-            tool_result = search_jobs.invoke(tool_call["args"])
+
+            if tool_call["name"] == "search_jobs":
+                tool_result = search_jobs.invoke(
+                    tool_call["args"]
+                )
+
+            elif tool_call["name"] == "get_occupation_information":
+                tool_result = get_occupation_information.invoke(
+                    tool_call["args"]
+                )
+
+            elif tool_call["name"] == "get_required_skills":
+                tool_result = get_required_skills.invoke(
+                    tool_call["args"]
+                )
+
+            else:
+                continue
 
             messages.append(
                 ToolMessage(
@@ -69,7 +116,6 @@ After receiving the search results, analyze them and return:
                 )
             )
 
-        # Let the LLM analyze the tool results
         final_response = llm_with_tools.invoke(messages)
 
     else:

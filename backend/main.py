@@ -6,8 +6,10 @@ from backend.database.database import (
     get_session
 )
 
-from backend.database.crud import create_user
-
+from backend.database.crud import (
+    create_user,
+    get_user
+)
 from backend.schemas.career import (
     CareerRequest,
     UserProfileRequest
@@ -61,15 +63,36 @@ def create_user_profile(
 
 @app.post("/api/career")
 def career_assistant(
-    request: CareerRequest
+    request: CareerRequest,
+    session: Session = Depends(get_session)
 ):
+
+    user = get_user(
+        session=session,
+        user_id=request.user_id
+    )
+
+    if not user:
+        return {
+            "error": "User not found"
+        }
+
+    user_profile = {
+        "name": user.name,
+        "education": user.education or "",
+        "experience": user.experience.split(",") if user.experience else [],
+        "skills": user.skills.split(",") if user.skills else [],
+        "interests": user.interests.split(",") if user.interests else [],
+        "location": user.location or ""
+    }
 
     initial_state = {
         "user_id": request.user_id,
-        "query": request.query
+        "query": request.query,
+        "user_profile": user_profile
     }
 
-    result = graph.invoke(
+    result = career_graph.invoke(
         initial_state
     )
 
