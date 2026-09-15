@@ -1,71 +1,59 @@
-from backend.agents.freelance_agent import freelance_agent
+from backend.graph.state import CareerState
+from backend.agents.job_agent import job_agent
 
 
-# ============================================================
-# Test User Profile
-# ============================================================
+def main():
+    # Test user profile
+    test_state: CareerState = {
+        "user_profile": {
+            "name": "Joud",
+            "education": "BSc Software Engineering",
+            "experience": [
+                "Software Engineering Intern at Sallam Tech"
+            ],
+            "skills": [
+                "Python",
+                "JavaScript",
+                "React",
+                "HTML",
+                "CSS",
+                "FastAPI",
+                "RAG",
+                "LLMs",
+                "Git"
+            ],
+            "interests": [
+                "Artificial Intelligence",
+                "Software Engineering",
+                "Web Development"
+            ],
+            "location": "Saudi Arabia"
+        },
 
-test_state = {
-    "user_profile": {
-        "skills": [
-            "Python",
-            "FastAPI",
-            "React",
-            "JavaScript",
-            "SQL",
-            "Git",
-            "LangChain",
-            "RAG",
-            "OpenAI"
-        ],
-
-        "experience": [
-            "Software Engineering graduate",
-            "React web development internship",
-            "AI and RAG projects",
-            "Agentic AI Engineering bootcamp"
-        ],
-
-        "interests": [
-            "AI",
-            "Generative AI",
-            "Agentic AI",
-            "Web Development",
-            "Backend Development"
-        ],
-
-        "location": "Saudi Arabia"
-    },
-
-    "query": "Find freelance projects related to AI, Python, FastAPI, LangChain, RAG, or React that match my skills."
-}
-
-
-# ============================================================
-# Run Agent
-# ============================================================
-
-if __name__ == "__main__":
+        "query": "Find entry-level AI Engineer and Software Engineer jobs in Saudi Arabia"
+    }
 
     print("=" * 70)
-    print("TESTING FREELANCER AGENT")
+    print("TESTING JOB AGENT")
     print("=" * 70)
 
     try:
-
-        result = freelance_agent(test_state)
+        result = job_agent(test_state)
 
         print("\n" + "=" * 70)
-        print("FREELANCE ANALYSIS")
+        print("JOB AGENT RESULT")
         print("=" * 70)
 
-        print(result["freelance_analysis"])
+        print(result.get("job_analysis", "No job analysis returned."))
 
     except Exception as e:
-
         print("\n" + "=" * 70)
         print("ERROR")
         print("=" * 70)
 
         print(type(e).__name__)
         print(str(e))
+
+
+if __name__ == "__main__":
+    main()
