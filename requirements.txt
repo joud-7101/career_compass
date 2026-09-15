@@ -5,11 +5,17 @@ requests
 
 langgraph
 langchain
+langchain-community<0.4
 langchain-openai
+langchain-tavily
 
 sqlmodel
 pydantic
 pydantic-settings
 
 python-dotenv
+apify-client
 jobspy
+datasets
+instructor>=1.17.0
+ragas==0.3.9
