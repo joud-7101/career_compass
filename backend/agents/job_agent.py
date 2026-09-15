@@ -46,7 +46,9 @@ USER REQUEST
 
 INSTRUCTIONS
 ------------
-1. Identify the job role or opportunity the user is asking for.
+1. Identify the target job role and relevant context from the user's request.
+   The context may include technologies, specialization,
+   industry, responsibilities, or career interests.
 
 2. Use the job search tool to find real job listings.
 
@@ -56,6 +58,16 @@ INSTRUCTIONS
 4. Use the O*NET tool to retrieve occupation,
    essential skills, and technology information
    for the identified job role.
+
+   When calling the O*NET tool:
+   - job_title must be the identified target role.
+   - user_skills must come from the user's profile.
+   - context must contain relevant terms extracted
+     from the user's request, such as technologies,
+     specialization, industry, responsibilities,
+     or career interests.
+
+   Do not use the user's skills as the job title.
 
 5. Use the Resume tool to retrieve the
    required skills associated with the identified
@@ -68,10 +80,15 @@ INSTRUCTIONS
 8. Use Resume information only when the matched title
    is clearly relevant to the requested role.
 
-9. Analyze the job, O*NET, and Resume results against
+9. Prefer the O*NET occupation whose title most closely
+   matches the requested role. Treat context and user
+   skills as supporting evidence, not as replacements
+   for the requested job title.
+
+10. Analyze the job, O*NET, and Resume results against
    the user's profile, including skill matches and gaps.
 
-10. Use O*NET and Resume information to support
+11. Use O*NET and Resume information to support
     your recommendations.
 
 Return:
