@@ -25,4 +25,5 @@ python-jobspy==1.1.82
 alembic
 pwdlib[argon2]
 PyJWT
-python-multipart
+python-multipart 
+email-validator 
