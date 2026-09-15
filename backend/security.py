@@ -34,4 +34,19 @@ def create_access_token(user_id: int) -> str:
         payload,
         settings.openai_api_key,
         algorithm=ALGORITHM,
-    ) 
+    )
+
+
+def decode_access_token(token: str) -> int:
+    payload = jwt.decode(
+        token,
+        settings.openai_api_key,
+        algorithms=[ALGORITHM],
+    )
+
+    user_id = payload.get("sub")
+
+    if user_id is None:
+        raise ValueError("Invalid token")
+
+    return int(user_id) 
