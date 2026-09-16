@@ -108,9 +108,11 @@ Return:
    the skill-gap analysis and recommendations."""
 
     messages = [HumanMessage(content=prompt)]
-    
+
     response = llm_with_tools.invoke(messages)
     structured_llm = llm.with_structured_output(JobAgentOutput)#for structured output of the job agent
+
+    jobs = []
 
     if response.tool_calls:
         messages.append(response)
@@ -121,6 +123,9 @@ Return:
                 tool_result = search_jobs.invoke(
                     tool_call["args"]
                 )
+
+                if isinstance(tool_result, list):
+                    jobs.extend(tool_result)
 
             elif tool_call["name"] == "get_occupation_information":
                 tool_result = get_occupation_information.invoke(
@@ -148,5 +153,6 @@ Return:
         final_response = response
 
     return {
-        "job_analysis": final_response.content
+        "job_analysis": final_response.content,
+        "jobs": jobs,
     }
