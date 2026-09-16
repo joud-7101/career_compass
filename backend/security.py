@@ -40,7 +40,7 @@ def create_access_token(user_id: int) -> str:
 def decode_access_token(token: str) -> int:
     payload = jwt.decode(
         token,
-        settings.openai_api_key,
+        settings.jwt_secret_key,
         algorithms=[ALGORITHM],
     )
 

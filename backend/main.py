@@ -1,75 +1,50 @@
 from fastapi import FastAPI, Depends
 from sqlmodel import Session
 
+from backend.routers.auth import router as auth_router
+
 from backend.database.database import (
     create_db_and_tables,
-    get_session
+    get_session,
 )
 
 from backend.database.crud import (
-    create_user,
-    get_user
-)
-from backend.schemas.career import (
-    CareerRequest,
-    UserProfileRequest
+    get_user,
+    get_user_profile,
 )
 
+from backend.schemas.career import CareerRequest
 from backend.graph.graph import career_graph
 
 
 app = FastAPI(
     title="Career Compass API",
-    version="0.1.0"
+    version="0.1.0",
 )
+
+app.include_router(auth_router)
 
 
 @app.on_event("startup")
 def startup():
-
     create_db_and_tables()
 
 
 @app.get("/")
 def root():
-
     return {
         "message": "Career Compass API is running"
-    }
-
-
-@app.post("/api/users")
-def create_user_profile(
-    request: UserProfileRequest,
-    session: Session = Depends(get_session)
-):
-
-    user = create_user(
-        session=session,
-        user_id=request.user_id,
-        name=request.name,
-        education=request.education,
-        location=request.location,
-        skills=",".join(request.skills),
-        experience=",".join(request.experience),
-        interests=",".join(request.interests)
-    )
-
-    return {
-        "message": "User created successfully",
-        "user_id": user.id
     }
 
 
 @app.post("/api/career")
 def career_assistant(
     request: CareerRequest,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ):
-
     user = get_user(
         session=session,
-        user_id=request.user_id
+        user_id=request.user_id,
     )
 
     if not user:
@@ -77,40 +52,31 @@ def career_assistant(
             "error": "User not found"
         }
 
+    profile = get_user_profile(
+        session=session,
+        user_id=request.user_id,
+    )
+
     user_profile = {
-        "name": user.name,
-        "education": user.education or "",
-        "experience": user.experience.split(",") if user.experience else [],
-        "skills": user.skills.split(",") if user.skills else [],
-        "interests": user.interests.split(",") if user.interests else [],
-        "location": user.location or ""
+        "name": profile.name if profile else "",
+        "education": profile.education if profile else "",
+        "experience": [],
+        "skills": [],
+        "interests": profile.interests if profile else "",
+        "location": profile.location if profile else "",
     }
 
     initial_state = {
         "user_id": request.user_id,
         "query": request.query,
-        "user_profile": user_profile
+        "user_profile": user_profile,
     }
 
-    result = career_graph.invoke(
-        initial_state
-    )
+    result = career_graph.invoke(initial_state)
 
     return {
-        "response": result.get(
-            "final_response",
-            ""
-        ),
-        "jobs": result.get(
-            "jobs",
-            []
-        ),
-        "certifications": result.get(
-            "certifications",
-            []
-        ),
-        "freelance_projects": result.get(
-            "freelance_projects",
-            []
-        )
+        "response": result.get("final_response", ""),
+        "jobs": result.get("jobs", []),
+        "certifications": result.get("certifications", []),
+        "freelance_projects": result.get("freelance_projects", []),
     }

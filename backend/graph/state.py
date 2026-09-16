@@ -52,6 +52,10 @@ class CareerState(TypedDict, total=False):
     certification_analysis: str
     freelance_analysis: str
 
+    jobs: list[dict]
+    certifications: list[dict]
+    freelance_projects: list[dict]
+
     # -------------------------
     # Final output
     # -------------------------
