@@ -42,3 +42,11 @@ if __name__ == "__main__":
         print("\nERROR:")
         print(type(e).__name__)
         print(str(e)) 
+        print("\nSTRUCTURED JOBS:")
+print(result.get("jobs", []))
+
+print("\nSTRUCTURED CERTIFICATIONS:")
+print(result.get("certifications", []))
+
+print("\nSTRUCTURED FREELANCE PROJECTS:")
+print(result.get("freelance_projects", [])) 
