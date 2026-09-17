@@ -121,15 +121,21 @@ USER REQUEST:
 # LOAD USER PROFILE
 # ---------------------------------------------------------
 
-def load_user_profile(state: CareerState):
+def load_user_profile(
+    state: CareerState,
+) -> dict:
 
-    # Database logic will go here.
-    #
-    # For the first version, we use the profile
-    # that comes from the API request.
+    profile = state.get(
+        "user_profile"
+    )
+
+    if not profile:
+        raise ValueError(
+            "User profile is missing."
+        )
 
     return {
-        "user_profile": state["user_profile"]
+        "user_profile": profile
     }
 
 

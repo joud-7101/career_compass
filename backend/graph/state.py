@@ -1,8 +1,13 @@
-from typing import Annotated
-import operator
-
+from typing import  Annotated,Literal
 from typing_extensions import TypedDict
+from operator import add
 
+from backend.schemas.career_response import (
+    JobOpportunity,
+    CertificationRecommendation,
+    FreelanceProject,
+    AgentIssue,
+)
 
 from typing import TypedDict, Literal
 
@@ -48,12 +53,41 @@ class CareerState(TypedDict, total=False):
     # Agent outputs
     # -------------------------
 
-    job_analysis: str
-    certification_analysis: str
-    freelance_analysis: str
+    selected_certification: str
 
+    certification_recommendations: list[dict]
+
+    
+    current_level: Literal[
+        "Beginner",
+        "Intermediate",
+        "Advanced"
+    ]
+    exam_date: str
+    
+    # -------------------------
+    # Structured Agent outputs
+    # -------------------------
+
+    jobs: list[JobOpportunity]
+    certifications: list[CertificationRecommendation]
+    freelance_projects: list[FreelanceProject]
+    # -----------------------------------------------------
+    # Errors / warnings
+    #
+    # `add` allows multiple parallel agents to contribute
+    # issues without overwriting each other.
+    # -----------------------------------------------------
+
+    issues: Annotated[
+        list[AgentIssue],
+        add,
+    ]
     # -------------------------
     # Final output
     # -------------------------
-
     final_response: str
+#new archture
+#     final_response: str
+
+    

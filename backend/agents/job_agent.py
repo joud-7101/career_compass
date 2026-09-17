@@ -4,8 +4,16 @@ from langchain_core.messages import HumanMessage, ToolMessage
 from backend.graph.state import CareerState
 from backend.config import settings
 from backend.tools.job_search import search_jobs
+from backend.tools.onet import get_occupation_information
+#from backend.tools.resume import get_required_skills
+from backend.schemas.career_response import (
+    JobOpportunity,
+    MatchDetails,
+)
+from pydantic import BaseModel, Field
 
-
+class JobAgentOutput(BaseModel):
+    jobs: list[JobOpportunity] = Field(default_factory=list)
 llm = ChatOpenAI(
     model="gpt-4.1-mini",
     temperature=0,
@@ -27,12 +35,11 @@ job opportunities.
 
 USER PROFILE
 ------------
-Name: {user_profile.get("name", "")}
-Education: {user_profile.get("education", "")}
-Experience: {user_profile.get("experience", [])}
-Skills: {user_profile.get("skills", [])}
-Interests: {user_profile.get("interests", [])}
-Location: {user_profile.get("location", "")}
+Name: {user_profile.personal_information.name}
+Education: {user_profile.education}
+Experience: {user_profile.experience}
+Skills: {user_profile.skills}
+Location: {user_profile.personal_information.location}
 
 USER REQUEST
 ------------
@@ -47,9 +54,32 @@ After receiving the search results, analyze them and return:
 2. Why each job matches the user
 3. Important skill gaps
 4. Recommended next steps
-"""
+5. Use O*NET and Resume information to support
+   the skill-gap analysis and recommendations.
+ For every recommended job, return:
+
+- title
+- company
+- location
+- url
+- employment_type
+- source
+- match:
+    - score (0-100)
+    - matching_skills
+    - missing_skills
+    - explanation
+
+Only use information available in the tool results.
+Never invent URLs, companies, or job details."""
 
     messages = [HumanMessage(content=prompt)]
+    
+    response = llm_with_tools.invoke(messages)
+    structured_llm = llm.with_structured_output(
+    JobAgentOutput,
+    method="function_calling"
+)#for structured output of the job agent
 
     # Let the LLM decide whether to use the job search tool
     response = llm_with_tools.invoke(messages)
@@ -69,12 +99,11 @@ After receiving the search results, analyze them and return:
                 )
             )
 
-        # Let the LLM analyze the tool results
-        final_response = llm_with_tools.invoke(messages)
+        final_response = structured_llm.invoke(messages)
 
     else:
         final_response = response
 
     return {
-        "job_analysis": final_response.content
-    }
+    "jobs": final_response.jobs
+}
