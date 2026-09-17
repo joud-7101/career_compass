@@ -18,14 +18,7 @@ AgentName = Literal[
     "freelance"
 ]
 
-# User information shared between agents
-class UserProfile(TypedDict, total=False):
-    name: str
-    education: str
-    experience: list[str]
-    skills: list[str]
-    interests: list[str]
-    location: str
+from backend.schemas.profile import UserProfile
 
 
 class CareerState(TypedDict, total=False):

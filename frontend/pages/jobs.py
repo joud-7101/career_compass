@@ -138,7 +138,7 @@ if "jobs_results" not in st.session_state:
     with st.spinner("🔍 Finding job opportunities matched to your profile..."):
         try:
             resp = requests.post(
-                f"{API_BASE}/api/career/jobs",
+                f"{API_BASE}/api/career/jobs",#LOOK HERE
                 json={"query": f"Find jobs matching profile of {current_role}"},
                 headers={"Authorization": f"Bearer {token}"},
                 timeout=120,

@@ -271,19 +271,23 @@ if recommendations:
         "Low": "#9FB3C8",
     }
 
-    for rec in recommendations:
-        exam_name = rec.get("exam_name", "")
+    for i, rec in enumerate(recommendations):
+        exam_name = rec.get("name", "")
         exam_code = rec.get("exam_code", "")
-        certifying_body = rec.get("certifying_body", "")
-        reason = rec.get("reason", "")
-        priority = rec.get("priority", "Medium")
+        certifying_body = rec.get("provider", "")
+        
+        # Reason is now nested inside the match block
+        match_details = rec.get("match", {})
+        reason = match_details.get("explanation", "")
+        
+        priority = str(rec.get("priority", "medium")).title()
         colour = priority_colours.get(priority, "#627D98")
 
         display_label = exam_name
         if exam_code:
             display_label += f" ({exam_code})"
 
-        with st.container(key=f"cert_rec_{exam_name[:20]}", border=True):
+        with st.container(key=f"cert_rec_{i}_{exam_name[:10]}", border=True):
 
             left_rec, right_rec = st.columns([4, 1], vertical_alignment="center")
 
@@ -317,7 +321,7 @@ if recommendations:
 
                 if st.button(
                     "Select",
-                    key=f"cert_select_{exam_name[:20]}",
+                    key=f"cert_select_{i}_{exam_name[:10]}",
                     type="secondary",
                     use_container_width=True
                 ):

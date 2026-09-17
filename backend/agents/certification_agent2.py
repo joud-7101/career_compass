@@ -178,7 +178,7 @@ def recommend_certifications(
 
     if not profile:
         return {
-            "certification_recommendations": [],
+            "certifications": [],
             "certification_analysis": (
                 "No user profile was provided."
             ),
@@ -223,7 +223,7 @@ def recommend_certifications(
     if not candidates:
 
         return {
-            "certification_recommendations": [],
+            "certifications": [],
             "certification_analysis": (
                 "No matching certifications were found "
                 "in Cert Atlas for the current user profile."

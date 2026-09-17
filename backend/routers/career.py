@@ -47,47 +47,26 @@ def get_current_user_id(
 # Helper: load & convert profile from DB to agent format
 # --------------------------------------------------
 
+from backend.schemas.profile import UserProfile
+
 def load_agent_profile(
     user_id: int,
     session: Session,
-) -> dict:
+) -> UserProfile:
     """
     Load the user's approved ProfileReview JSON and convert it to
-    the flat dict format that the career agents expect.
+    the UserProfile Pydantic object that the career agents expect.
     """
     review = get_profile_review(session, user_id)
 
     if not review or not review.profile_data:
-        return {}
+        return UserProfile()
 
     try:
-        full_profile: dict = json.loads(review.profile_data)
-    except json.JSONDecodeError:
-        return {}
-
-    personal = full_profile.get("personal_information", {})
-
-    # Skills: list of {name, level} → list of name strings
-    skills = [
-        s.get("name", "")
-        for s in full_profile.get("skills", [])
-        if s.get("name")
-    ]
-
-    # Experience: keep as-is (agents handle lists)
-    experience = full_profile.get("experience", [])
-
-    # Education: keep as-is
-    education = full_profile.get("education", [])
-
-    return {
-        "name": personal.get("name", ""),
-        "location": personal.get("location", ""),
-        "skills": skills,
-        "experience": experience,
-        "education": education,
-        "interests": [],
-    }
+        # The agents now expect the full UserProfile object
+        return UserProfile.model_validate_json(review.profile_data)
+    except Exception:
+        return UserProfile()
 
 
 # ==================================================
@@ -122,7 +101,6 @@ def get_job_recommendations(
         "jobs": result.get("jobs", []),
         "analysis": result.get("job_analysis", ""),
     }
-
 
 # ==================================================
 # FREELANCE endpoint
@@ -182,7 +160,7 @@ def get_certification_recommendations(
     result = recommend_certifications(state)
 
     return {
-        "recommendations": result.get("certification_recommendations", []),
+        "recommendations": result.get("certifications", []),
         "analysis": result.get("certification_analysis", ""),
     }
 

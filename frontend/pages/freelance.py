@@ -160,8 +160,10 @@ if projects:
 
             with col:
                 title = project.get("title", "Untitled Project")
-                category = project.get("category", project.get("skills", ""))
-                description = project.get("description", "")
+                # Match details are nested inside a "match" object
+                match_info = project.get("match", {})
+                category = project.get("source", "")
+                description = match_info.get("explanation", "")
                 budget = project.get(
                     "budget",
                     project.get("budget_or_rate", "")
@@ -171,8 +173,8 @@ if projects:
                     "url",
                     project.get("job_url", "")
                 )
-                match_score = project.get("match_score", "")
-                project_skills = project.get("skills", [])
+                match_score = match_info.get("score", "")
+                project_skills = match_info.get("matching_skills", [])
 
                 # ---------------------------------
                 # Skills
@@ -309,11 +311,17 @@ if projects:
                     # Why it matches
                     # ---------------------------------
 
-                    matching = (
-                        ", ".join(skills_list[:3])
-                        if skills_list
-                        else "your skills"
-                    )
+                    match_explanation = match_info.get("explanation", "")
+                    if not match_explanation:
+                        matching = (
+                            ", ".join(skills_list[:3])
+                            if skills_list
+                            else "your skills"
+                        )
+                        match_explanation = (
+                            f"Your {matching} experience "
+                            "match the main project requirements."
+                        )
 
                     st.html(
                         f"""
@@ -325,8 +333,7 @@ if projects:
                             </div>
 
                             <div class="cc-why-text">
-                                Your {matching} experience
-                                match the main project requirements.
+                                {match_explanation}
                             </div>
 
                         </div>

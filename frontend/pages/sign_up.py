@@ -137,6 +137,9 @@ with center:
                     else:
                         st.error(f"Registration failed: {detail}")
 
+                elif response.status_code == 422:
+                    st.error("Please enter a valid email address.")
+
                 else:
                     st.error(
                         f"Registration failed (status {response.status_code}). "
