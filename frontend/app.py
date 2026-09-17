@@ -4,6 +4,7 @@ import requests
 
 API_URL = "http://127.0.0.1:8000"
 
+logo = Path(__file__).parent / "assets" / "logo.png"
 
 st.set_page_config(
     page_title="Career Compass",
@@ -33,13 +34,65 @@ query = st.text_area(
 
 if st.button("Ask Career Compass"):
 
-    if not query:
+ if not query:
+    st.warning("Please enter a question.")
+else:
+    st.image(
+        logo,
+        width=170
+    )
 
-        st.warning(
-            "Please enter your career question."
+    # Right side buttons
+    with st.container(
+        horizontal=True,
+        width="content",
+        vertical_alignment="center"
+    ):
+
+        if st.button(
+            "Sign in",
+            key="nav_signin",
+            type="tertiary"
+        ):
+            st.switch_page("pages/sign_in.py")
+
+        if st.button(
+            "Get started",
+            key="nav_start",
+            type="primary",
+            icon=":material/arrow_forward:"
+        ):
+            st.switch_page("pages/sign_up.py")
+
+
+# =================================
+# 2. HERO
+# =================================
+
+with st.container(
+    key="home_hero"
+):
+
+    left, right = st.columns(
+        [1.12, 1],
+        gap="large",
+        vertical_alignment="center"
+    )
+
+
+    # LEFT SIDE
+    with left:
+
+        st.html(
+            """
+            <div id="home" class="cc-badge">
+                <span></span>
+                Your career, navigated with confidence
+            </div>
+            """
         )
 
-    else:
+        
 
         with st.spinner(
             "Career Compass is working..."
