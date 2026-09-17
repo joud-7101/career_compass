@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends
 from sqlmodel import Session
 
 from backend.routers.auth import router as auth_router
+from backend.routers.portfolio import router as portfolio_router
 
 from backend.database.database import (
     create_db_and_tables,
@@ -23,6 +24,7 @@ app = FastAPI(
 )
 
 app.include_router(auth_router)
+app.include_router(portfolio_router)
 
 
 @app.on_event("startup")

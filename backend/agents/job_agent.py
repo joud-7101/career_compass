@@ -6,7 +6,7 @@ from backend.config import settings
 from backend.tools.job_search import search_jobs
 from backend.tools.onet import get_occupation_information
 from backend.tools.resume import get_required_skills
-from backend.schemas.career import (
+from backend.schemas.career_response import (
     JobOpportunity,
     MatchDetails,
 )

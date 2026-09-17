@@ -18,6 +18,11 @@ class User(SQLModel, table=True):
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
 
+    profile_review: Optional["ProfileReview"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+
     skills: list["UserSkill"] = Relationship(
         back_populates="user",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
@@ -62,6 +67,21 @@ class UserProfile(SQLModel, table=True):
 
     user: Optional[User] = Relationship(back_populates="profile")
 
+class ProfileReview(SQLModel, table=True):
+    __tablename__ = "profile_reviews"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", unique=True, index=True)
+
+    profile_data: str = ""
+    review_status: str = "draft"
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    user: Optional[User] = Relationship(
+        back_populates="profile_review"
+    )
 
 class Skill(SQLModel, table=True):
     __tablename__ = "skills"

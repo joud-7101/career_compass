@@ -1,6 +1,7 @@
 from pathlib import Path
 import streamlit as st
-
+from components.portfolio import portfolio_section
+import requests
 
 # -----------------------------
 # Page settings
@@ -66,12 +67,50 @@ with center:
         st.session_state["cv_uploaded"] = True
 
 
-        if st.button(
-            "Continue",
-            type="primary",
-            use_container_width=True
-        ):
+        # portfolio
+        st.divider()
+        portfolio_url = portfolio_section()
 
-            st.info(
-                "Next: extract the CV data and create the profile."
-            )
+
+        if st.button("Continue", type="primary", use_container_width=True):
+            if portfolio_url:
+                try:
+                    with st.spinner("Extracting your portfolio..."):
+                        response = requests.post(
+                            "http://127.0.0.1:8000/api/users/me/portfolio",
+                            json={"url": portfolio_url},
+                            timeout=60,
+                        )
+
+                    if response.status_code == 200:
+                        data = response.json()
+
+                        # Save extracted portfolio profile
+                        st.session_state["portfolio_profile"] = data["profile"]["profile"]
+
+                        # Save extraction warnings
+                        st.session_state["portfolio_warnings"] = data["profile"].get(
+                            "extraction_warnings", []
+                        )
+
+                        # Go to Profile Review
+                        st.switch_page("pages/profile_review.py")
+
+                    else:
+                        st.error(
+                            f"Portfolio extraction failed. "
+                            f"Status: {response.status_code}"
+                        )
+                        st.code(response.text)
+
+                except requests.Timeout:
+                    st.error(
+                        "Portfolio extraction is taking too long. "
+                        "Please try again."
+                    )
+
+                except requests.RequestException as e:
+                    st.error(f"Could not connect to the CareerCompass API: {e}")
+
+            else:
+                st.info("No portfolio URL added. You can continue without one.")

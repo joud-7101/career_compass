@@ -1,7 +1,7 @@
+from datetime import datetime
 from sqlmodel import Session, select
 
-from backend.database.models import User, UserProfile
-
+from backend.database.models import User, UserProfile, ProfileReview
 
 def get_user_by_email(session: Session, email: str):
     statement = select(User).where(User.email == email)
@@ -70,3 +70,43 @@ def get_user_profile(session: Session, user_id: int):
     )
 
     return session.exec(statement).first() 
+
+def create_or_update_profile_review(
+    session: Session,
+    user_id: int,
+    profile_data: str,
+    review_status: str = "draft",
+):
+    statement = select(ProfileReview).where(
+        ProfileReview.user_id == user_id
+    )
+
+    review = session.exec(statement).first()
+
+    if review is None:
+        review = ProfileReview(
+            user_id=user_id,
+            profile_data=profile_data,
+            review_status=review_status,
+        )
+        session.add(review)
+    else:
+        review.profile_data = profile_data
+        review.review_status = review_status
+        review.updated_at = datetime.utcnow()
+
+    session.commit()
+    session.refresh(review)
+
+    return review
+
+
+def get_profile_review(
+    session: Session,
+    user_id: int,
+):
+    statement = select(ProfileReview).where(
+        ProfileReview.user_id == user_id
+    )
+
+    return session.exec(statement).first()
