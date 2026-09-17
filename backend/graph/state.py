@@ -1,7 +1,7 @@
 from typing import Literal
 from typing_extensions import TypedDict
 
-from backend.schemas.career import (
+from backend.schemas.career_response import (
     JobOpportunity,
     CertificationRecommendation,
     FreelanceProject,
