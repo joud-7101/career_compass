@@ -95,4 +95,20 @@ If no live results are available, say so clearly and do not fabricate alternativ
 """
 
     response = llm.invoke(prompt)
-    return {"freelance_analysis": response.content}
+
+    freelance_projects = []
+
+    for result in [live_projects, web_opportunities]:
+        if isinstance(result, list):
+            freelance_projects.extend(result)
+
+        elif isinstance(result, dict) and "results" in result:
+            results = result.get("results", [])
+
+            if isinstance(results, list):
+                freelance_projects.extend(results)
+
+    return {
+        "freelance_analysis": response.content,
+        "freelance_projects": freelance_projects,
+    }

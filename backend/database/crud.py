@@ -1,27 +1,25 @@
-from sqlmodel import Session
+from sqlmodel import Session, select
 
-from backend.database.models import User
+from backend.database.models import User, UserProfile
+
+
+def get_user_by_email(session: Session, email: str):
+    statement = select(User).where(User.email == email)
+    return session.exec(statement).first()
+
+
+def get_user(session: Session, user_id: int):
+    return session.get(User, user_id)
 
 
 def create_user(
     session: Session,
-    user_id: str,
-    name: str,
-    education: str = "",
-    location: str = "",
-    skills: str = "",
-    experience: str = "",
-    interests: str = "",
+    email: str,
+    password_hash: str,
 ):
-
     user = User(
-        id=user_id,
-        name=name,
-        education=education,
-        location=location,
-        skills=skills,
-        experience=experience,
-        interests=interests,
+        email=email,
+        password_hash=password_hash,
     )
 
     session.add(user)
@@ -31,6 +29,44 @@ def create_user(
     return user
 
 
-def get_user(session: Session, user_id: str):
+def create_or_update_profile(
+    session: Session,
+    user_id: int,
+    name: str = "",
+    education: str = "",
+    location: str = "",
+    interests: str = "",
+):
+    statement = select(UserProfile).where(
+        UserProfile.user_id == user_id
+    )
 
-    return session.get(User, user_id)
+    profile = session.exec(statement).first()
+
+    if profile is None:
+        profile = UserProfile(
+            user_id=user_id,
+            name=name,
+            education=education,
+            location=location,
+            interests=interests,
+        )
+        session.add(profile)
+    else:
+        profile.name = name
+        profile.education = education
+        profile.location = location
+        profile.interests = interests
+
+    session.commit()
+    session.refresh(profile)
+
+    return profile
+
+
+def get_user_profile(session: Session, user_id: int):
+    statement = select(UserProfile).where(
+        UserProfile.user_id == user_id
+    )
+
+    return session.exec(statement).first() 

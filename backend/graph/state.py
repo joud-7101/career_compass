@@ -87,6 +87,10 @@ class CareerState(TypedDict, total=False):
 
     issues: list[AgentIssue]
 
+    jobs: list[dict]
+    certifications: list[dict]
+    freelance_projects: list[dict]
+
     # -------------------------
     # Final output
     # -------------------------
