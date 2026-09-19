@@ -33,7 +33,17 @@ class User(SQLModel, table=True):
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
 
+    educations: list["Education"] = Relationship(
+       back_populates="user",
+       sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+
     projects: list["Project"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+
+    certifications: list["Certification"] = Relationship(
         back_populates="user",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
@@ -53,20 +63,108 @@ class User(SQLModel, table=True):
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
 
+    languages: list["UserLanguage"] = Relationship(
+       back_populates="user",
+       sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+
+    achievements: list["Achievement"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+    
+
+class Achievement(SQLModel, table=True):
+    __tablename__ = "achievements"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+
+    title: str = ""
+    description: str = ""
+    date: str = ""
+    source: str = "manual"
+
+    user: Optional[User] = Relationship(
+        back_populates="achievements"
+    )
+
+class UserLanguage(SQLModel, table=True):
+    __tablename__ = "user_languages"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+
+    name: str = ""
+
+    user: Optional[User] = Relationship(
+        back_populates="languages"
+    )
+
+class Education(SQLModel, table=True):
+    __tablename__ = "educations"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+
+    institution: str = ""
+    degree: str = ""
+    field_of_study: str = ""
+    start_date: str = ""
+    end_date: str = ""
+
+    source: str = "manual"
+
+    user: Optional[User] = Relationship(
+        back_populates="educations"
+    )
+
+class Certification(SQLModel, table=True):
+    __tablename__ = "certifications"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+
+    name: str = ""
+    issuer: str = ""
+    credential_id: str = ""
+    credential_url: str = ""
+    issue_date: str = ""
+    expiry_date: str = ""
+    source: str = "manual"
+
+    user: Optional[User] = Relationship(
+        back_populates="certifications"
+    )
+
+
 
 class UserProfile(SQLModel, table=True):
     __tablename__ = "user_profiles"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="users.id", unique=True, index=True)
+    user_id: int = Field(
+        foreign_key="users.id",
+        unique=True,
+        index=True
+    )
 
+    # Personal Information
     name: str = ""
-    education: str = ""
+    email: str = ""
+    phone: str = ""
     location: str = ""
+
+    # Professional Summary
+    professional_summary: str = ""
+
+    #--------------------------------------------------
+    education: str = ""
     interests: str = ""
 
-    user: Optional[User] = Relationship(back_populates="profile")
-
+    user: Optional[User] = Relationship(
+        back_populates="profile"
+    )
 
 class ProfileReview(SQLModel, table=True):
     __tablename__ = "profile_reviews"
@@ -101,6 +199,9 @@ class UserSkill(SQLModel, table=True):
     user_id: int = Field(foreign_key="users.id", index=True)
     skill_id: int = Field(foreign_key="skills.id", index=True)
 
+    
+    source: str = "manual" # نهى
+
     user: Optional[User] = Relationship(back_populates="skills")
     skill: Optional[Skill] = Relationship(back_populates="user_skills")
 
@@ -113,9 +214,21 @@ class Experience(SQLModel, table=True):
 
     title: str = ""
     company: str = ""
-    description: str = ""
+    location: str = "" # نهى
+    description: str = "" 
+
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+
+
+# 2023 or Jan 2023 or 2023 - Present or Summer 2024
+    #start_date:str = ""
+   # end_date: str = ""
+
+    
+    source: str = "manual" # نهى
+
+  
 
     user: Optional[User] = Relationship(back_populates="experiences")
 
@@ -129,6 +242,7 @@ class Project(SQLModel, table=True):
     name: str
     description: str = ""
     url: str = ""
+    repository_url: str = ""
     technologies: str = ""
     source: str = "manual"
 
@@ -157,6 +271,10 @@ class PortfolioLink(SQLModel, table=True):
     user_id: int = Field(foreign_key="users.id", index=True)
 
     url: str
+    # To find out what type of link this is
+    kind: str = "other"
+    label: str = ""
+
     source: str = "website"
     status: str = "pending"
     error_message: str = ""

@@ -1,21 +1,43 @@
+# API + Frontend
 fastapi
 uvicorn[standard]
 streamlit
 requests
+python-multipart
 
+# LangChain / Agents
 langgraph
 langchain
 langchain-community<0.4
 langchain-openai
 langchain-tavily
 
+# Database
 sqlmodel
+alembic
+
+# Validation / Settings
 pydantic
 pydantic-settings
-
 python-dotenv
+
+# OpenAI + CV Processing
+openai
+pypdf
+PyMuPDF
+
+# Authentication
+pwdlib[argon2]
+PyJWT
+email-validator
+
+# Job Search
+python-jobspy==1.1.82
+numpy==1.26.3
+pandas==2.2.3
+
+# Other Project Dependencies
 apify-client
-jobspy
 datasets
 instructor>=1.17.0
 ragas==0.3.9

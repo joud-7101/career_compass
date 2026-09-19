@@ -5,6 +5,9 @@ from backend.routers.auth import router as auth_router
 from backend.routers.portfolio import router as portfolio_router
 from backend.routers.career import router as career_router
 
+# Resume upload and CV processing routes
+from backend.routers.resume import router as resume_router
+
 from backend.database.database import (
     create_db_and_tables,
     get_session,
@@ -27,7 +30,7 @@ app = FastAPI(
 app.include_router(auth_router)
 app.include_router(portfolio_router)
 app.include_router(career_router)
-
+app.include_router(resume_router)
 
 @app.on_event("startup")
 def startup():
