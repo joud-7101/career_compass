@@ -1,10 +1,10 @@
-from pathlib import Path
-import streamlit as st
+﻿from pathlib import Path
 import requests
+import streamlit as st
 
-# ---------------------------------
+# =================================
 # Page settings
-# ---------------------------------
+# =================================
 
 st.set_page_config(
     page_title="Freelance | CareerCompass",
@@ -18,9 +18,9 @@ logo = ASSETS / "logo.png"
 API_BASE = "http://127.0.0.1:8000"
 
 
-# ---------------------------------
+# =================================
 # Auth guard
-# ---------------------------------
+# =================================
 
 token = st.session_state.get("token")
 if not token:
@@ -54,7 +54,7 @@ with st.container(
         """
     )
 
-    if st.button("← Dashboard", key="fl_nav_back", type="tertiary"):
+    if st.button("<- Dashboard", key="fl_nav_back", type="tertiary"):
         st.switch_page("pages/dashboard.py")
 
 
@@ -85,16 +85,20 @@ with st.container(key="freelance_hero"):
 
 
 # =================================
-# FETCH FREELANCE FROM AGENT
+# FETCH FREELANCE PROJECTS FROM API
 # =================================
 
+# We extract the profile from session state so the frontend can show
+# the user''s name and skills without another API call.
 profile = st.session_state.get("profile", {})
 skills_list = [s.get("name", "") for s in (profile.get("skills", []) if profile else [])]
 personal = profile.get("personal_information", {}) if profile else {}
 display_name = personal.get("name", "") or st.session_state.get("user_email", "").split("@")[0].title()
 
+# Only fetch if we do not already have results cached in session state.
+# Once fetched, the list stays until the user clicks "Refresh projects".
 if "freelance_results" not in st.session_state:
-    with st.spinner("🔍 Finding freelance projects matched to your skills..."):
+    with st.spinner("Finding freelance projects matched to your skills..."):
         try:
             resp = requests.post(
                 f"{API_BASE}/api/career/freelance",
@@ -106,9 +110,8 @@ if "freelance_results" not in st.session_state:
             if resp.status_code == 200:
                 data = resp.json()
                 st.session_state["freelance_results"] = data.get("freelance_projects", [])
-                # DEBUG: show what we received from the API
-                st.toast(f"✅ Received {len(st.session_state['freelance_results'])} projects from API")
                 st.session_state["freelance_analysis"] = data.get("analysis", "")
+                st.toast(f"Found {len(st.session_state['freelance_results'])} projects for you")
             else:
                 st.session_state["freelance_results"] = []
                 st.session_state["freelance_analysis"] = ""
@@ -129,18 +132,167 @@ projects = st.session_state.get("freelance_results", [])
 analysis = st.session_state.get("freelance_analysis", "")
 
 
-# Refresh button
+# Refresh button clears the cached projects AND all cached proposals
+# so everything is fetched fresh on the next page load.
 if st.button(
     ":material/refresh: Refresh projects",
     key="fl_refresh",
     type="tertiary"
 ):
-    for key in ["freelance_results", "freelance_analysis"]:
+    # Clear project list, analysis, and every cached proposal/chat
+    keys_to_clear = [k for k in st.session_state if k.startswith("freelance")]
+    keys_to_clear += [k for k in st.session_state if k.startswith("proposal_")]
+    for key in keys_to_clear:
         st.session_state.pop(key, None)
     st.rerun()
 
+
 # =================================
-# PROJECT CARDS — 2-column grid
+# PROPOSAL DIALOG (shown as modal)
+# =================================
+# This dialog is rendered once at module level. It is triggered by
+# setting st.session_state["open_proposal_for"] to a project index.
+# Streamlit reruns the page, sees the flag, and calls st.dialog which
+# opens the modal automatically.
+#
+# WHY use a dialog flag instead of rendering inline?
+# A dialog gives the user a focused, distraction-free chat window
+# without navigating away from the project list.
+
+@st.dialog("Proposal Workshop", width="large")
+def show_proposal_dialog(project_index: int, project: dict):
+    """
+    Render the proposal chat window inside a Streamlit dialog (modal).
+
+    The dialog has two phases:
+      Phase 1 -- If no proposal exists yet, generate one and show it.
+      Phase 2 -- Once a proposal exists, show the full chat history
+                 and a chat input so the user can refine it.
+    """
+    # Keys used to store this project''s chat history in session state.
+    # Each project gets its own independent conversation thread.
+    chat_key = f"proposal_chat_{project_index}"
+    generating_key = f"proposal_generating_{project_index}"
+
+    # Extract project data that we need for both the API call and display
+    title = project.get("title", "Untitled Project")
+    match_info = project.get("match", {})
+    description = match_info.get("explanation", "")
+    budget = project.get("budget_or_rate", "")
+    matching_skills = match_info.get("matching_skills", [])
+    missing_skills = match_info.get("missing_skills", [])
+
+    # Show project context at the top of the dialog so the user
+    # knows which project the proposal is for
+    st.markdown(f"**Project:** {title}")
+    if budget:
+        st.caption(f"Budget: {budget}")
+    st.divider()
+
+    # ── PHASE 1: Generate the initial proposal ──────────────────────
+    # If there is no chat history yet, we have not generated the
+    # proposal for this project. Do it now.
+    if chat_key not in st.session_state:
+        with st.spinner("Drafting your personalized proposal..."):
+            try:
+                resp = requests.post(
+                    f"{API_BASE}/api/career/freelance/proposal",
+                    json={
+                        "project_title": title,
+                        "project_description": description,
+                        "budget_or_rate": budget,
+                        "matching_skills": matching_skills,
+                        "missing_skills": missing_skills,
+                    },
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=60,
+                )
+
+                if resp.status_code == 200:
+                    proposal_text = resp.json().get("proposal", "")
+                    # Store the proposal as the first "assistant" message
+                    # in this project''s conversation history
+                    st.session_state[chat_key] = [
+                        {"role": "assistant", "content": proposal_text}
+                    ]
+                else:
+                    st.error(f"Could not generate proposal (error {resp.status_code}). Please try again.")
+                    return
+
+            except requests.RequestException as e:
+                st.error(f"Could not reach the API: {e}")
+                return
+
+    # ── PHASE 2: Display the chat history and accept refinements ────
+    # At this point we always have at least one message (the proposal).
+    chat_history = st.session_state.get(chat_key, [])
+
+    # Render every message in the conversation so far.
+    # "assistant" messages show the AI proposal / revision.
+    # "user" messages show what the user asked for.
+    for msg in chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # Copy-to-clipboard helper: show the latest proposal in a code
+    # block so the user can copy it easily.
+    # We find the last "assistant" message for the copy block.
+    last_proposal = next(
+        (m["content"] for m in reversed(chat_history) if m["role"] == "assistant"),
+        None
+    )
+
+    if last_proposal:
+        with st.expander("Copy proposal text"):
+            st.code(last_proposal, language=None)
+
+    # ── Chat input for refinements ───────────────────────────────────
+    # The placeholder text guides the user on what kinds of things
+    # they can ask for.
+    user_input = st.chat_input(
+        "Ask for changes... e.g. 'make it shorter', 'more confident tone', 'focus on Python'"
+    )
+
+    if user_input:
+        # 1. Append the user''s message to the history immediately
+        #    so it appears in the chat window right away
+        chat_history.append({"role": "user", "content": user_input})
+        st.session_state[chat_key] = chat_history
+
+        # 2. Call the chat endpoint with the full history.
+        #    The backend sends all messages to the LLM so it has full
+        #    context of every previous refinement request.
+        with st.spinner("Revising your proposal..."):
+            try:
+                resp = requests.post(
+                    f"{API_BASE}/api/career/freelance/proposal/chat",
+                    json={
+                        "project_title": title,
+                        "project_description": description,
+                        # Send the full conversation history (stateless design --
+                        # the backend does not store any session state, the
+                        # frontend is the single source of truth for the history)
+                        "messages": chat_history,
+                    },
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=60,
+                )
+
+                if resp.status_code == 200:
+                    reply = resp.json().get("reply", "")
+                    # 3. Append the AI''s reply and rerun so the UI updates
+                    chat_history.append({"role": "assistant", "content": reply})
+                    st.session_state[chat_key] = chat_history
+                    st.rerun()
+                else:
+                    st.error(f"Could not get a reply (error {resp.status_code}). Please try again.")
+
+            except requests.RequestException as e:
+                st.error(f"Could not reach the API: {e}")
+
+
+# =================================
+# PROJECT CARDS -- 2-column grid
 # =================================
 
 if not projects and not analysis:
@@ -148,6 +300,16 @@ if not projects and not analysis:
         "No freelance projects found. Try refreshing or make sure your "
         "profile has skills added."
     )
+
+# Check if a proposal dialog should be opened for a specific project.
+# This flag is set when the user clicks "View Proposal" on a card.
+# We open the dialog BEFORE rendering the cards so Streamlit can
+# display it as a modal overlay on top of the card grid.
+open_for = st.session_state.get("open_proposal_for")
+if open_for is not None and projects and open_for < len(projects):
+    show_proposal_dialog(open_for, projects[open_for])
+    # Clear the flag so the dialog does not re-open on next rerun
+    st.session_state.pop("open_proposal_for", None)
 
 if projects:
     # Render in pairs (2-column grid)
@@ -157,12 +319,12 @@ if projects:
 
         for col_idx, (col, project) in enumerate(zip(cols, row_projects)):
 
-            # Unique index for EVERY project
+            # Unique index for EVERY project across all rows.
+            # This is used as the key for session state chat storage.
             project_index = row_start + col_idx
 
             with col:
                 title = project.get("title", "Untitled Project")
-                # Match details are nested inside a "match" object
                 match_info = project.get("match", {})
                 category = project.get("source", "")
                 description = match_info.get("explanation", "")
@@ -178,10 +340,7 @@ if projects:
                 match_score = match_info.get("score", "")
                 project_skills = match_info.get("matching_skills", [])
 
-                # ---------------------------------
-                # Skills
-                # ---------------------------------
-
+                # Skill names (capped at 4 badges for layout)
                 if isinstance(project_skills, list):
                     project_skill_names = [
                         str(s) for s in project_skills if s
@@ -189,21 +348,17 @@ if projects:
                 else:
                     project_skill_names = []
 
-                # ---------------------------------
-                # Category
-                # ---------------------------------
-
+                # Category display
                 if isinstance(category, list):
-                    category_str = ", ".join(
-                        str(c) for c in category[:2]
-                    )
+                    category_str = ", ".join(str(c) for c in category[:2])
                 else:
                     category_str = str(category) if category else ""
 
-                # ---------------------------------
-                # PROJECT CARD
-                # ---------------------------------
+                # Whether a proposal has already been generated for this
+                # project in this session (used to label the button)
+                proposal_ready = f"proposal_chat_{project_index}" in st.session_state
 
+                # ── PROJECT CARD ─────────────────────────────────────
                 with st.container(
                     key=f"fl_card_{project_index}",
                     border=True
@@ -228,10 +383,7 @@ if projects:
                                 """
                             )
 
-                    # ---------------------------------
-                    # Title + category
-                    # ---------------------------------
-
+                    # Title + source
                     st.html(
                         f"""
                         <div class="cc-profile-value"
@@ -246,28 +398,19 @@ if projects:
                         """
                     )
 
-                    # ---------------------------------
-                    # Description
-                    # ---------------------------------
-
+                    # Short description (first 180 chars)
                     if description:
                         snippet = description[:180].strip()
-
                         if len(description) > 180:
-                            snippet += "…"
-
+                            snippet += "..."
                         st.write(snippet)
 
-                    # ---------------------------------
                     # Skill badges
-                    # ---------------------------------
-
                     if project_skill_names:
                         badges = "".join(
                             f'<span class="cc-skill-badge">{s}</span>'
                             for s in project_skill_names
                         )
-
                         st.html(
                             f"""
                             <div class="cc-skill-badges"
@@ -277,10 +420,7 @@ if projects:
                             """
                         )
 
-                    # ---------------------------------
-                    # Budget + Duration
-                    # ---------------------------------
-
+                    # Budget + Duration metadata row
                     meta_l, meta_r = st.columns(2)
 
                     with meta_l:
@@ -309,10 +449,7 @@ if projects:
                                 """
                             )
 
-                    # ---------------------------------
-                    # Why it matches
-                    # ---------------------------------
-
+                    # "Why it matches" section
                     match_explanation = match_info.get("explanation", "")
                     if not match_explanation:
                         matching = (
@@ -342,39 +479,50 @@ if projects:
                         """
                     )
 
-                    # ---------------------------------
-                    # Buttons
-                    # ---------------------------------
+                    # ── Action buttons ───────────────────────────────
+                    btn_view, btn_proposal = st.columns(2)
 
-                    btn_view, btn_save = st.columns(2)
-
-                    # VIEW
+                    # VIEW PROJECT button -- opens the URL on Freelancer.com
                     with btn_view:
                         if project_url:
                             st.link_button(
-                                "View project ↗",
+                                "View project",
                                 url=str(project_url),
                                 type="primary",
                                 use_container_width=True
                             )
                         else:
                             st.button(
-                                "View project ↗",
+                                "View project",
                                 key=f"fl_view_{project_index}",
                                 type="primary",
                                 use_container_width=True,
                                 disabled=True
                             )
 
-                    # SAVE
-                    with btn_save:
-                        st.button(
-                            "Save project",
-                            key=f"fl_save_{project_index}",
-                            use_container_width=True
+                    # VIEW PROPOSAL button -- opens the proposal dialog.
+                    # The label changes once a proposal has been generated
+                    # so the user knows the proposal is ready to view.
+                    with btn_proposal:
+                        proposal_label = (
+                            "View proposal"
+                            if proposal_ready
+                            else "Write proposal"
                         )
 
-# --- If no structured projects but analysis text exists ---
+                        if st.button(
+                            proposal_label,
+                            key=f"fl_proposal_{project_index}",
+                            use_container_width=True,
+                        ):
+                            # Set the flag that tells the dialog which
+                            # project to open, then rerun so the dialog
+                            # renders at the top of the page.
+                            st.session_state["open_proposal_for"] = project_index
+                            st.rerun()
+
+
+# If no structured projects but analysis text exists, show raw text
 if not projects and analysis:
     st.subheader("Agent Recommendations")
     st.markdown(analysis)

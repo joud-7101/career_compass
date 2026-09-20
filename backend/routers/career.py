@@ -20,6 +20,10 @@ from backend.agents.certification_agent2 import (
     recommend_certifications,
     prepare_selected_certification,
 )
+# Import the proposal agent functions.
+# generate_proposal() creates the first draft; chat_with_proposal()
+# handles follow-up refinement messages from the user.
+from backend.agents.proposal_agent import generate_proposal, chat_with_proposal
 
 router = APIRouter(
     prefix="/api/career",
@@ -147,6 +151,118 @@ def get_freelance_recommendations(
         "freelance_projects": projects,
         "analysis": result.get("freelance_analysis", ""),
     }
+
+
+# ==================================================
+# PROPOSAL endpoint — generate the first draft
+# ==================================================
+
+class ProposalRequest(BaseModel):
+    """
+    The frontend sends the project details it already has from the
+    freelance cards — the agent then uses these plus the user profile
+    to write a personalized proposal.
+    """
+    project_title: str
+    project_description: str
+    budget_or_rate: str | None = None
+    matching_skills: list[str] = []  # skills user has that match the project
+    missing_skills: list[str] = []   # skills the project needs but user lacks
+
+
+@router.post("/freelance/proposal")
+def get_proposal(
+    request: ProposalRequest,
+    user_id: int = Depends(get_current_user_id),
+    session: Session = Depends(get_session),
+):
+    """
+    Generate a personalized first-draft proposal for a specific project.
+
+    Called when the user clicks "View Proposal" on a freelance card.
+    Only runs once per project (the frontend caches the result in
+    session state), so latency here is acceptable.
+    """
+    user = get_user(session, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Load the user's full profile — this is the same profile object
+    # used by all other agents. It contains skills, experience, projects.
+    profile = load_agent_profile(user_id, session)
+
+    # Call the proposal agent to generate the first draft.
+    # This is a straightforward LLM call — no tools, no structured output.
+    proposal_text = generate_proposal(
+        profile=profile,
+        project_title=request.project_title,
+        project_description=request.project_description,
+        budget_or_rate=request.budget_or_rate,
+        matching_skills=request.matching_skills,
+        missing_skills=request.missing_skills,
+    )
+
+    return {"proposal": proposal_text}
+
+
+# ==================================================
+# PROPOSAL CHAT endpoint — refine the proposal
+# ==================================================
+
+class ChatMessage(BaseModel):
+    """A single message in the conversation history."""
+    role: str   # "user" or "assistant"
+    content: str
+
+
+class ProposalChatRequest(BaseModel):
+    """
+    The frontend sends the full conversation history on every turn.
+    This "stateless" design means the backend doesn't need to store
+    any session state — all history lives in the Streamlit session_state.
+    """
+    project_title: str
+    project_description: str
+    # The complete conversation so far, including the first AI proposal.
+    # Example: [{"role": "assistant", "content": "Dear..."},
+    #           {"role": "user",      "content": "make it shorter"}]
+    messages: list[ChatMessage]
+
+
+@router.post("/freelance/proposal/chat")
+def refine_proposal(
+    request: ProposalChatRequest,
+    user_id: int = Depends(get_current_user_id),
+    session: Session = Depends(get_session),
+):
+    """
+    Continue the proposal refinement conversation.
+
+    Called every time the user sends a follow-up message in the chat
+    window (e.g. "make it shorter", "focus on my Python experience").
+    The entire conversation history is sent each time so the LLM
+    always has full context of what has been asked before.
+    """
+    user = get_user(session, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    profile = load_agent_profile(user_id, session)
+
+    # Convert Pydantic message objects to plain dicts for the agent
+    messages_as_dicts = [
+        {"role": msg.role, "content": msg.content}
+        for msg in request.messages
+    ]
+
+    reply = chat_with_proposal(
+        profile=profile,
+        project_title=request.project_title,
+        project_description=request.project_description,
+        messages=messages_as_dicts,
+    )
+
+    return {"reply": reply}
 
 
 # ==================================================
