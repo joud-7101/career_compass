@@ -9,6 +9,8 @@ DATA_DIR = (
     / "onet"
 )
 
+from langchain_core.tools import tool
+
 @tool
 def get_occupation_information(
     job_title: str
@@ -116,6 +118,9 @@ def get_occupation_information(
         .drop_duplicates()
         .tolist()
     )
+    """
+    Get related occupation information and required skills for a given set of skills.
+    """
 
     return {
         "job_title": job_title,

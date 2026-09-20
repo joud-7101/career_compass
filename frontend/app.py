@@ -76,7 +76,7 @@ with st.container(
             key="nav_signin",
             type="tertiary"
         ):
-            account_notice()
+            st.switch_page("pages/sign_in.py")
 
         if st.button(
             "Get started",

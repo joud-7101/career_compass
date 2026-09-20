@@ -6,7 +6,7 @@ from backend.config import settings
 from backend.tools.job_search import search_jobs
 from backend.tools.onet import get_occupation_information
 from backend.tools.resume import get_required_skills
-from backend.schemas.career import (
+from backend.schemas.career_response import (
     JobOpportunity,
     MatchDetails,
 )
@@ -30,7 +30,23 @@ llm_with_tools = llm.bind_tools([
 
 
 def job_agent(state: CareerState):
-    user_profile = state.get("user_profile", {})
+
+    user_profile = state.get("user_profile")
+    if not user_profile:
+        name = ""
+        education = ""
+        experience = []
+        skills = []
+        interests = []
+        location = ""
+    else:
+        name = getattr(user_profile.personal_information, "name", "")
+        location = getattr(user_profile.personal_information, "location", "")
+        education = user_profile.education
+        experience = user_profile.experience
+        skills = user_profile.skills
+        interests = [] # Schema has no interests by default, or you can add if needed
+
     query = state.get("query", "")
 
     prompt = f"""
@@ -41,12 +57,12 @@ that match the user's request and profile.
 
 USER PROFILE
 ------------
-Name: {user_profile.get("name", "")}
-Education: {user_profile.get("education", "")}
-Experience: {user_profile.get("experience", [])}
-Skills: {user_profile.get("skills", [])}
-Interests: {user_profile.get("interests", [])}
-Location: {user_profile.get("location", "")}
+Name: {name}
+Education: {education}
+Experience: {experience}
+Skills: {skills}
+Interests: {interests}
+Location: {location}
 
 USER REQUEST
 ------------
@@ -54,7 +70,9 @@ USER REQUEST
 
 INSTRUCTIONS
 ------------
-1. Identify the job role or opportunity the user is asking for.
+1. Identify the target job role and relevant context from the user's request.
+   The context may include technologies, specialization,
+   industry, responsibilities, or career interests.
 
 2. Use the job search tool to find real job listings.
 
@@ -64,6 +82,16 @@ INSTRUCTIONS
 4. Use the O*NET tool to retrieve occupation,
    essential skills, and technology information
    for the identified job role.
+
+   When calling the O*NET tool:
+   - job_title must be the identified target role.
+   - user_skills must come from the user's profile.
+   - context must contain relevant terms extracted
+     from the user's request, such as technologies,
+     specialization, industry, responsibilities,
+     or career interests.
+
+   Do not use the user's skills as the job title.
 
 5. Use the Resume tool to retrieve the
    required skills associated with the identified
@@ -76,10 +104,15 @@ INSTRUCTIONS
 8. Use Resume information only when the matched title
    is clearly relevant to the requested role.
 
-9. Analyze the job, O*NET, and Resume results against
+9. Prefer the O*NET occupation whose title most closely
+   matches the requested role. Treat context and user
+   skills as supporting evidence, not as replacements
+   for the requested job title.
+
+10. Analyze the job, O*NET, and Resume results against
    the user's profile, including skill matches and gaps.
 
-10. Use O*NET and Resume information to support
+11. Use O*NET and Resume information to support
     your recommendations.
 
 Return:
@@ -91,9 +124,13 @@ Return:
    the skill-gap analysis and recommendations."""
 
     messages = [HumanMessage(content=prompt)]
-    
+
     response = llm_with_tools.invoke(messages)
-    structured_llm = llm.with_structured_output(JobAgentOutput)#for structured output of the job agent
+    # Pydantic serialization warning is suppressed process-wide
+    # in freelance_agent.py — see that file for the full explanation.
+    structured_llm = llm.with_structured_output(JobAgentOutput)
+
+    jobs = []
 
     if response.tool_calls:
         messages.append(response)
@@ -104,6 +141,9 @@ Return:
                 tool_result = search_jobs.invoke(
                     tool_call["args"]
                 )
+
+                if isinstance(tool_result, list):
+                    jobs.extend(tool_result)
 
             elif tool_call["name"] == "get_occupation_information":
                 tool_result = get_occupation_information.invoke(
@@ -125,11 +165,12 @@ Return:
                 )
             )
 
-        final_response = llm_with_tools.invoke(messages)
+        final_response = llm.invoke(messages)
 
     else:
         final_response = response
 
     return {
-        "job_analysis": final_response.content
+        "job_analysis": final_response.content,
+        "jobs": jobs,
     }

@@ -16,6 +16,12 @@ from backend.tools.web_search import (
     search_certification_web,
 )
 
+from backend.schemas.career_response import (
+    CertificationRecommendation,
+    MatchDetails,
+)
+from backend.schemas.profile import UserProfile
+
 llm = ChatOpenAI(
     model="gpt-4.1-mini",
     temperature=0,
@@ -27,6 +33,7 @@ llm = ChatOpenAI(
 # Structured output for Stage 1
 # =========================================================
 
+
 class SearchKeywords(BaseModel):
     keywords: list[str] = Field(
         description=(
@@ -35,42 +42,62 @@ class SearchKeywords(BaseModel):
         )
     )
 
-class CertificationRecommendation(BaseModel):
-    exam_id: str
-    exam_name: str
-    exam_code: str | None = None
-    certifying_body: str
-    reason: str
-    priority: str
+
+#     exam_id: str
+#     exam_name: str
+#     exam_code: str | None = None
+#     certifying_body: str
+#     reason: str
+#     priority: str
+
 
 class CertificationRecommendationList(BaseModel):
-    recommendations: list[CertificationRecommendation]
+        recommendations: list[CertificationRecommendation]
 
 
-# =========================================================
-# Structured LLMs
-# =========================================================
+    # =========================================================
+    # Structured LLMs
+    # =========================================================
 
-keyword_llm = llm.with_structured_output(
-    SearchKeywords
-)
+# The Pydantic serialization warning is suppressed process-wide
+# in main.py via warnings.filterwarnings(). See that file for
+# the full explanation of why this warning occurs.
+keyword_llm = llm.with_structured_output(SearchKeywords)
 
-recommendation_llm = llm.with_structured_output(
-    CertificationRecommendationList
-)
+recommendation_llm = llm.with_structured_output(CertificationRecommendationList)
 
 
 # =========================================================
 # Helper: Build Cert Atlas candidates
 # =========================================================
 
-def get_candidate_certifications(
-    profile: dict
-) -> list[dict]:
+
+def get_candidate_certifications(profile: UserProfile) -> list[dict]:
     """
     Generate search keywords from the user profile,
     then search Cert Atlas for matching certifications.
     """
+
+    education = [
+        {
+            "institution": edu.institution,
+            "degree": edu.degree,
+            "field_of_study": edu.field_of_study,
+        }
+        for edu in profile.education
+    ]
+
+    experience = [
+        {
+            "title": exp.title,
+            "company": exp.company,
+            "description": exp.description,
+            "skills": exp.skills,
+        }
+        for exp in profile.experience
+    ]
+
+    skills = [skill.name for skill in profile.skills]
 
     keyword_prompt = f"""
 You are helping search a professional certification database.
@@ -78,16 +105,15 @@ You are helping search a professional certification database.
 USER PROFILE
 ------------
 Education:
-{profile.get("education", "")}
+{education}
 
 Experience:
-{profile.get("experience", [])}
+{experience}
 
 Skills:
-{profile.get("skills", [])}
+{skills}
 
-Interests:
-{profile.get("interests", [])}
+
 
 Create short search keywords that can be used to find
 relevant professional certifications.
@@ -109,17 +135,13 @@ Rules:
 - Keywords should be based only on the user's profile.
 """
 
-    keyword_result = keyword_llm.invoke(
-        keyword_prompt
-    )
+    keyword_result = keyword_llm.invoke(keyword_prompt)
 
     candidates = {}
 
     for keyword in keyword_result.keywords:
 
-        results = search_certifications(
-            keyword
-        )
+        results = search_certifications(keyword)
 
         for exam in results:
 
@@ -128,32 +150,59 @@ Rules:
             if exam_id:
                 candidates[exam_id] = exam
 
-    return list(
-        candidates.values()
-    )
+    return list(candidates.values())
 
 
 # =========================================================
 # Stage 1: Recommend Certifications
 # =========================================================
 
-def recommend_certifications(
-    state: CareerState
-) -> dict:
 
-    profile = state.get(
-        "user_profile",
-        {}
-    )
+def recommend_certifications(state: CareerState) -> dict:
 
-    candidates = get_candidate_certifications(
-        profile
-    )
+    profile = state.get("user_profile")
+
+    if not profile:
+        return {
+            "certifications": [],
+            "certification_analysis": ("No user profile was provided."),
+        }
+
+    # -----------------------------------------------------
+    # Extract fields from UserProfile
+    # -----------------------------------------------------
+
+    education = [
+        {
+            "institution": edu.institution,
+            "degree": edu.degree,
+            "field_of_study": edu.field_of_study,
+        }
+        for edu in profile.education
+    ]
+
+    experience = [
+        {
+            "title": exp.title,
+            "company": exp.company,
+            "description": exp.description,
+            "skills": exp.skills,
+        }
+        for exp in profile.experience
+    ]
+
+    skills = [skill.name for skill in profile.skills]
+
+    # -----------------------------------------------------
+    # Find certification candidates
+    # -----------------------------------------------------
+
+    candidates = get_candidate_certifications(profile)
 
     if not candidates:
 
         return {
-            "certification_recommendations": [],
+            "certifications": [],
             "certification_analysis": (
                 "No matching certifications were found "
                 "in Cert Atlas for the current user profile."
@@ -161,6 +210,10 @@ def recommend_certifications(
         }
 
     # Only send fields needed by the LLM
+    # -----------------------------------------------------
+    # Only send fields needed by the LLM
+    # -----------------------------------------------------
+
     candidate_text = "\n".join(
         [
             (
@@ -173,6 +226,10 @@ def recommend_certifications(
         ]
     )
 
+    # -----------------------------------------------------
+    # Recommendation prompt
+    # -----------------------------------------------------
+
     prompt = f"""
 You are the Certification Agent for Career Compass.
 
@@ -181,17 +238,15 @@ that are suitable for the user.
 
 USER PROFILE
 ------------
+
 Education:
-{profile.get("education", "")}
+{education}
 
 Experience:
-{profile.get("experience", [])}
+{experience}
 
 Skills:
-{profile.get("skills", [])}
-
-Interests:
-{profile.get("interests", [])}
+{skills}
 
 USER REQUEST
 ------------
@@ -203,170 +258,125 @@ CERTIFICATIONS FOUND IN CERT ATLAS
 
 IMPORTANT RULES
 ---------------
+
 - Recommend only certifications listed above.
 - Never invent a certification.
 - Keep the exact exam_id from Cert Atlas.
 - Recommend every certification that is meaningfully
-  relevant to the user's profile.
+relevant to the user's profile.
 - Do not force a fixed number of recommendations.
 - Exclude certifications that are clearly unrelated.
 - Avoid duplicate certifications.
-- Consider:
-    - Education
-    - Experience
-    - Current skills
-    - Interests
-    - Career direction
-    - Skill gaps
+
+Consider:
+- Education
+- Experience
+- Current skills
+- Career direction
+- Skill gaps
 
 For every recommended certification provide:
-- exam_id
-- exam_name
-- exam_code
-- certifying_body
-- reason
-- priority
 
-Priority must be:
-- High
-- Medium
-- Low
+- name
+- provider
+- exam_code
+- priority
+- match:
+    - score from 0 to 100
+    - matching_skills
+    - missing_skills
+    - explanation
+
+Priority must be one of:
+- high
+- medium
+- low
 """
 
-    result = recommendation_llm.invoke(
-        prompt
-    )
+    result = recommendation_llm.invoke(prompt)
 
-    recommendations = [
-        recommendation.model_dump()
-        for recommendation
-        in result.recommendations
-    ]
-
-    analysis = "\n\n".join(
-        [
-            (
-                f"{index + 1}. "
-                f"{item.exam_name}"
-                f" ({item.exam_code or 'No exam code'})\n"
-                f"Provider: {item.certifying_body}\n"
-                f"Reason: {item.reason}\n"
-                f"Priority: {item.priority}"
-            )
-            for index, item
-            in enumerate(
-                result.recommendations
-            )
-        ]
-    )
+    # Keep Pydantic models
+    recommendations = result.recommendations
 
     return {
-        "certification_recommendations":
-            recommendations,
-
-        "certification_analysis":
-            analysis,
+        "certifications": recommendations,
     }
+
+    # recommendations = [
+    #     recommendation.model_dump()
+    #     for recommendation
+    #     in result.recommendations
+    # ]
+    # keeping them as pydantic models
+    recommendations = result.recommendations
+
+
+# commented it because i've changed the structer
 
 
 # =========================================================
 # Stage 2: Selected Certification
 # =========================================================
 
-def prepare_selected_certification(
-    state: CareerState
-) -> dict:
 
-    selected_certification = state.get(
-        "selected_certification"
-    )
+def prepare_selected_certification(state: CareerState) -> dict:
 
-    current_level = state.get(
-        "current_level"
-    )
+    selected_certification = state.get("selected_certification")
 
-    exam_date_text = state.get(
-        "exam_date"
-    )
+    current_level = state.get("current_level")
+
+    exam_date_text = state.get("exam_date")
 
     # -----------------------------------------
     # Validate inputs
     # -----------------------------------------
 
     if not selected_certification:
-        return {
-            "certification_analysis":
-                "No certification was selected."
-        }
+        return {"certification_analysis": "No certification was selected."}
 
     if not current_level:
-        return {
-            "certification_analysis":
-                "Current level is required."
-        }
+        return {"certification_analysis": "Current level is required."}
 
     if not exam_date_text:
-        return {
-            "certification_analysis":
-                "Exam date is required."
-        }
+        return {"certification_analysis": "Exam date is required."}
 
     # -----------------------------------------
     # Validate exam date
     # -----------------------------------------
 
     try:
-        exam_date = date.fromisoformat(
-            exam_date_text
-        )
+        exam_date = date.fromisoformat(exam_date_text)
 
     except ValueError:
         return {
-            "certification_analysis": (
-                "Invalid exam date. "
-                "Use YYYY-MM-DD format."
-            )
+            "certification_analysis": ("Invalid exam date. " "Use YYYY-MM-DD format.")
         }
 
     today = date.today()
 
-    days_remaining = (
-        exam_date - today
-    ).days
+    days_remaining = (exam_date - today).days
 
     if days_remaining < 0:
-        return {
-            "certification_analysis":
-                "Exam date cannot be in the past."
-        }
+        return {"certification_analysis": "Exam date cannot be in the past."}
 
     # -----------------------------------------
     # Cert Atlas
     # -----------------------------------------
 
-    blueprint = get_certification_blueprint(
-        selected_certification
-    )
+    blueprint = get_certification_blueprint(selected_certification)
 
     if blueprint is None:
         return {
             "certification_analysis": (
-                "The selected certification "
-                "could not be found in Cert Atlas."
+                "The selected certification " "could not be found in Cert Atlas."
             )
         }
 
-    exam_name = blueprint.get(
-        "exam_name"
-    )
+    exam_name = blueprint.get("exam_name")
 
-    exam_code = blueprint.get(
-        "exam_code"
-    )
+    exam_code = blueprint.get("exam_code")
 
-    certifying_body = blueprint.get(
-        "certifying_body"
-    )
+    certifying_body = blueprint.get("certifying_body")
 
     # -----------------------------------------
     # Official Web Search
@@ -476,34 +486,23 @@ STRICT RULES
 - Keep the response clear and practical.
 """
 
-    response = llm.invoke(
-        prompt
-    )
+    response = llm.invoke(prompt)
 
-    return {
-        "certification_analysis":
-            response.content
-    }
+    return {"certification_analysis": response.content}
+
 
 # =========================================================
 # Main Certification Agent
 # =========================================================
 
-def certification_agent(
-    state: CareerState
-):
 
-    selected_certification = state.get(
-        "selected_certification"
-    )
+def certification_agent(state: CareerState):
+
+    selected_certification = state.get("selected_certification")
 
     # Stage 1
     if not selected_certification:
-        return recommend_certifications(
-            state
-        )
+        return recommend_certifications(state)
 
     # Stage 2
-    return prepare_selected_certification(
-        state
-    )
+    return prepare_selected_certification(state)

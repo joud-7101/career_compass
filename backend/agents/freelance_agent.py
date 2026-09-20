@@ -1,4 +1,4 @@
-﻿from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI
 
 from backend.config import settings
 from backend.graph.state import CareerState
@@ -7,6 +7,15 @@ from backend.tools.freelance.freelancer_api import (
     search_freelancer_projects as search_freelancer_api,
 )
 from backend.tools.freelance.freelance_search import search_freelance_projects
+from pydantic import BaseModel, Field
+
+from backend.schemas.career_response import FreelanceProject
+
+
+class FreelancerAgentOutput(BaseModel):#for the structured output of the freelance agent
+    freelance_projects: list[FreelanceProject] = Field(
+        default_factory=list
+    )
 
 
 llm = ChatOpenAI(
@@ -14,7 +23,11 @@ llm = ChatOpenAI(
     temperature=0,
     api_key=settings.openai_api_key,
 )
-
+# Pydantic serialization warning (Expected `none` on AIMessage.parsed)
+# is suppressed process-wide in main.py — see that file for details.
+structured_llm = llm.with_structured_output(
+    FreelancerAgentOutput
+)
 
 def _as_string_list(value: object) -> list[str]:
     """Return cleaned profile values that are expected to be lists of strings."""
@@ -33,12 +46,19 @@ def _run_tool(tool, payload: dict, source: str):
 
 def freelance_agent(state: CareerState) -> dict:
     """Find current freelance opportunities plus historical market context."""
-    profile = state.get("user_profile", {})
-    skills = _as_string_list(profile.get("skills", []))
-    experience = _as_string_list(profile.get("experience", []))
-    interests = _as_string_list(profile.get("interests", []))
-    location = str(profile.get("location", "") or "").strip()
-    query = str(state.get("query", "") or "").strip()
+    profile = state.get("user_profile")#changed the extraxcted profile to user_profile to match the CareerState schema
+    skills = [skill.name for skill in profile.skills] if profile else []
+    experience = [
+    exp.title
+    for exp in profile.experience
+] if profile else []
+    
+    location = (
+    profile.personal_information.location
+    if profile
+    else ""
+)
+    query = str(state.get("query", "") or "").strip()#check if i should change it or not 
 
     try:
         market_analysis = analyze_historical_market(skills=skills)
@@ -70,7 +90,7 @@ opportunities that realistically match the user's abilities.
 USER PROFILE
 Skills: {skills}
 Experience: {experience}
-Interests: {interests}
+
 Location: {location or 'Information unavailable'}
 Request: {query or 'Information unavailable'}
 
@@ -87,12 +107,22 @@ Only recommend opportunities in the two LIVE result sets. Never invent URLs,
 budgets, titles, clients, requirements, or ratings. If a detail is absent, say
 "Information unavailable." Do not present historical dataset jobs as live.
 
-For each recommended live opportunity provide title, source, URL, budget/rate,
-match percentage, required skills, matching skills, missing skills, difficulty,
-why it matches, and Apply/Consider/Skip. Then include a short MARKET INSIGHT
-based only on historical analysis, SKILLS TO DEVELOP, and FINAL RECOMMENDATION.
-If no live results are available, say so clearly and do not fabricate alternatives.
+For every recommended project provide:
+
+- title
+- source
+- URL
+- budget or rate
+- match score from 0-100
+- matching skills
+- missing skills
+- explanation of why it matches
+
+Only recommend projects from the LIVE result sets.
+Never invent URLs or project information.
 """
 
-    response = llm.invoke(prompt)
-    return {"freelance_analysis": response.content}
+    response = structured_llm.invoke(prompt)
+    return {
+    "freelance_projects": response.freelance_projects
+}

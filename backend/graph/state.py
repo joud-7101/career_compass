@@ -1,7 +1,8 @@
-from typing import Literal
+from typing import  Annotated,Literal
 from typing_extensions import TypedDict
+from operator import add
 
-from backend.schemas.career import (
+from backend.schemas.career_response import (
     JobOpportunity,
     CertificationRecommendation,
     FreelanceProject,
@@ -30,6 +31,7 @@ AgentName = Literal[
 
 
 
+from backend.schemas.profile import UserProfile
 
 
 class CareerState(TypedDict, total=False):
@@ -87,25 +89,39 @@ class CareerState(TypedDict, total=False):
 
     issues: list[AgentIssue]
 
+    certification_recommendations: list[dict]
+
+    
+    current_level: Literal[
+        "Beginner",
+        "Intermediate",
+        "Advanced"
+    ]
+    exam_date: str
+    
+    # -------------------------
+    # Structured Agent outputs
+    # -------------------------
+
+    jobs: list[JobOpportunity]
+    certifications: list[CertificationRecommendation]
+    freelance_projects: list[FreelanceProject]
+    # -----------------------------------------------------
+    # Errors / warnings
+    #
+    # `add` allows multiple parallel agents to contribute
+    # issues without overwriting each other.
+    # -----------------------------------------------------
+
+    issues: Annotated[
+        list[AgentIssue],
+        add,
+    ]
     # -------------------------
     # Final output
     # -------------------------
+    final_response: str
 #new archture
 #     final_response: str
 
-#     Job Agent
-#     ↓
-# JobOpportunity objects
-#     ↓
-# CareerState.jobs
-#     ↓
-# CareerResponse.jobs
-#     ↓
-# Frontend directly displays cards
-
-#For example, Streamlit can simply do:
-# for job in response.jobs:
-#     st.write(job.title)
-#     st.write(job.company)
-#     st.write(job.match.score)
-#     st.write(job.match.matching_skills)
+    
