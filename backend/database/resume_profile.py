@@ -232,7 +232,11 @@ def save_extracted_profile(
         db_user_skill = UserSkillModel(
             user_id=user_id,
             skill_id=db_skill.id,
-            source="resume",
+            source=(
+                skill.source.kind
+                if skill.source
+                else "resume"
+            ),
         )
 
         session.add(db_user_skill)

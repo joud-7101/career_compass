@@ -23,6 +23,13 @@ def render_profile_editor(profile_data: dict) -> UserProfile | None:
         st.error("Could not load the extracted profile.")
         st.code(str(e))
         return None
+    
+    # Deleted profile items
+    st.session_state.setdefault("deleted_education", set())
+    st.session_state.setdefault("deleted_experience", set())
+    st.session_state.setdefault("deleted_projects", set())
+    st.session_state.setdefault("deleted_certifications", set())
+    st.session_state.setdefault("deleted_professional_links", set())
 
     st.subheader("Profile Review")
     st.caption(
@@ -90,6 +97,8 @@ def render_profile_editor(profile_data: dict) -> UserProfile | None:
     education = []
 
     for i, item in enumerate(profile.education):
+        if i in st.session_state["deleted_education"]:
+            continue
         with st.expander(
             f"Education {i + 1}: {item.institution}",
             expanded=True,
@@ -124,6 +133,14 @@ def render_profile_editor(profile_data: dict) -> UserProfile | None:
                 key=f"education_end_{i}",
             )
 
+            if st.button(
+                "Delete Education",
+                key=f"delete_education_{i}",
+                use_container_width=True,
+            ):
+                st.session_state["deleted_education"].add(i)
+                st.rerun()
+
             education.append(
                 {
                     "institution": institution,
@@ -143,6 +160,13 @@ def render_profile_editor(profile_data: dict) -> UserProfile | None:
     experience = []
 
     for i, item in enumerate(profile.experience):
+        experience_key = (
+            f"{item.title}|"
+            f"{item.company}|"
+            f"{item.start_date}"
+        )
+        if experience_key in st.session_state["deleted_experience"]:
+            continue
         with st.expander(
             f"Experience {i + 1}: {item.title}",
             expanded=True,
@@ -189,6 +213,14 @@ def render_profile_editor(profile_data: dict) -> UserProfile | None:
                 key=f"experience_skills_{i}",
             )
 
+            if st.button(
+                "Delete Experience",
+                key=f"delete_experience_{i}",
+                use_container_width=True,
+            ):
+                st.session_state["deleted_experience"].add(experience_key)
+                st.rerun()
+
             experience.append(
                 {
                     "title": title,
@@ -214,6 +246,8 @@ def render_profile_editor(profile_data: dict) -> UserProfile | None:
     projects = []
 
     for i, item in enumerate(profile.projects):
+        if i in st.session_state["deleted_projects"]:
+            continue
         with st.expander(
             f"Project {i + 1}: {item.name}",
             expanded=True,
@@ -250,6 +284,14 @@ def render_profile_editor(profile_data: dict) -> UserProfile | None:
                 key=f"project_repository_{i}",
             )
 
+            if st.button(
+                "Delete Project",
+                key=f"delete_project_{i}",
+                use_container_width=True,
+            ):
+                st.session_state["deleted_projects"].add(i)
+                st.rerun()
+
             projects.append(
                 {
                     "name": project_name,
@@ -273,6 +315,8 @@ def render_profile_editor(profile_data: dict) -> UserProfile | None:
     certifications = []
 
     for i, item in enumerate(profile.certifications):
+        if i in st.session_state["deleted_certifications"]:
+            continue
         with st.expander(
             f"Certification {i + 1}: {item.name}",
             expanded=False,
@@ -315,6 +359,14 @@ def render_profile_editor(profile_data: dict) -> UserProfile | None:
                 key=f"cert_expiry_{i}",
             )
 
+            if st.button(
+                "Delete Certification",
+                key=f"delete_certification_{i}",
+                use_container_width=True,
+            ):
+                st.session_state["deleted_certifications"].add(i)
+                st.rerun()
+
             certifications.append(
                 {
                     "name": cert_name,
@@ -345,6 +397,8 @@ def render_profile_editor(profile_data: dict) -> UserProfile | None:
     professional_links = []
 
     for i, item in enumerate(profile.professional_links):
+        if i in st.session_state["deleted_professional_links"]:
+            continue
         with st.expander(
             f"Link {i + 1}: {item.label or item.kind}",
             expanded=False,
@@ -360,6 +414,14 @@ def render_profile_editor(profile_data: dict) -> UserProfile | None:
                 value=item.label or "",
                 key=f"link_label_{i}",
             )
+
+            if st.button(
+                "Delete Link",
+                key=f"delete_professional_link_{i}",
+                use_container_width=True,
+            ):
+                st.session_state["deleted_professional_links"].add(i)
+                st.rerun()
 
             professional_links.append(
                 {
@@ -424,3 +486,21 @@ def render_profile_editor(profile_data: dict) -> UserProfile | None:
             st.code(str(e))
 
     return None
+
+    # --------------------------------------------------
+    # Deleted profile items
+    # --------------------------------------------------
+
+    delete_sections = [
+        "education",
+        "experience",
+        "projects",
+        "certifications",
+        "professional_links",
+    ]
+
+    for section in delete_sections:
+        st.session_state.setdefault(
+            f"deleted_{section}",
+            set(),
+        )

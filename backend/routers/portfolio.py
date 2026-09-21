@@ -4,6 +4,7 @@ from sqlmodel import Session
 
 from backend.database.database import get_session
 from backend.database.models import PortfolioLink
+from backend.routers.auth import get_current_user_id
 from backend.tools.portfolio_extractor import extract_portfolio_profile
 
 
@@ -20,10 +21,11 @@ class PortfolioRequest(BaseModel):
 @router.post("")
 def add_portfolio(
     request: PortfolioRequest,
+    user_id: int = Depends(get_current_user_id),
     session: Session = Depends(get_session),
 ):
     portfolio = PortfolioLink(
-        user_id=1,  # temporary until authentication is connected
+        user_id=user_id,
         url=str(request.url),
         source="website",
         status="pending",
@@ -48,7 +50,7 @@ def add_portfolio(
             "id": portfolio.id,
             "url": portfolio.url,
             "status": portfolio.status,
-            "profile": extraction.model_dump(),
+            "profile": extraction.model_dump(mode="json"),
         }
 
     except Exception as exc:

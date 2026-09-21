@@ -201,6 +201,14 @@ def extract_profile_from_resume(
     data["skills"] = normalized_skills
     data["review_status"] = "draft"
 
+    # Normalize professional links
+    for link in data.get("professional_links", []):
+        if isinstance(link, dict):
+            url = link.get("url")
+
+            if url and not url.startswith(("http://", "https://")):
+                link["url"] = "https://" + url
+
     profile = UserProfile.model_validate(
         data
     )

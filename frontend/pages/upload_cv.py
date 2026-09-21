@@ -82,48 +82,24 @@ with center:
 
         token = st.session_state.get("token")
 
+        # --------------------------------------------------
+        # Portfolio
+        # Optional extra source
+        # --------------------------------------------------
+
+        st.divider()
+
+        portfolio_url = portfolio_section()
 
         # --------------------------------------------------
-        # Upload CV button
+        # Extract CV + Portfolio
         # --------------------------------------------------
 
-        upload_button = st.button(
-            "Upload CV",
+        if st.button(
+            "Extract Profile",
             type="primary",
             use_container_width=True,
-        )
-
-
-        # --------------------------------------------------
-        # Retry button
-        # Show only if the previous upload failed
-        # --------------------------------------------------
-
-        retry_button = False
-
-        if st.session_state.get(
-            "cv_upload_failed",
-            False,
         ):
-
-            st.error(
-                st.session_state.get(
-                    "cv_upload_error",
-                    "Failed to upload CV.",
-                )
-            )
-
-            retry_button = st.button(
-                "Retry",
-                use_container_width=True,
-            )
-
-
-        # --------------------------------------------------
-        # Send CV to FastAPI
-        # --------------------------------------------------
-
-        if upload_button or retry_button:
 
             # User must be logged in
             if not token:
@@ -136,7 +112,7 @@ with center:
                 st.stop()
 
 
-            # Prepare PDF file for the API request
+            # Prepare CV file
             files = {
                 "file": (
                     cv_file.name,
@@ -146,193 +122,88 @@ with center:
             }
 
 
+            # Prepare portfolio URL
+            data = {}
+
+            if portfolio_url:
+                data["portfolio_url"] = portfolio_url
+
+
             try:
 
                 with st.spinner(
-                    "Uploading and processing your CV..."
+                    "Extracting your CV and portfolio..."
                 ):
 
                     response = requests.post(
-                        "http://127.0.0.1:8000/api/users/me/resume",
+                        "http://127.0.0.1:8000/api/users/me/profile/extract",
                         files=files,
+                        data=data,
                         headers={
                             "Authorization": f"Bearer {token}"
                         },
-                        timeout=60,
+                        timeout=120,
                     )
 
 
                 # --------------------------------------------------
-                # CV successfully processed
+                # Extraction successful
                 # --------------------------------------------------
 
                 if response.status_code == 200:
 
-                    data = response.json()
+                    result = response.json()
+
+                    # Save the combined profile
+                    st.session_state["profile"] = result["profile"]
+
+                    # Save portfolio warnings
+                    st.session_state["portfolio_warnings"] = (
+                        result.get(
+                            "portfolio_warnings",
+                            [],
+                        )
+                    )
 
                     st.session_state["cv_uploaded"] = True
-                    st.session_state["cv_upload_failed"] = False
-
-                    # Save extracted CV profile
-                    # Profile Review page will use this data
-                    st.session_state["profile"] = data["profile"]
 
                     st.success(
-                        "CV uploaded and processed successfully."
+                        "CV and portfolio extracted successfully."
+                    )
+
+                    # Go to Profile Review
+                    st.switch_page(
+                        "pages/profile_review.py"
                     )
 
 
                 # --------------------------------------------------
-                # Backend returned an error
+                # Backend error
                 # --------------------------------------------------
 
                 else:
 
-                    st.session_state["cv_upload_failed"] = True
-
-                    st.session_state["cv_upload_error"] = (
-                        "Failed to upload CV. "
-                        "Please try again."
-                    )
-
                     st.error(
-                        st.session_state["cv_upload_error"]
+                        "Profile extraction failed. "
+                        f"Status: {response.status_code}"
+                    )
+
+                    st.code(
+                        response.text
                     )
 
 
-            # --------------------------------------------------
-            # Could not connect to FastAPI
-            # --------------------------------------------------
+            except requests.Timeout:
 
-            except requests.exceptions.RequestException:
-
-                st.session_state["cv_upload_failed"] = True
-
-                st.session_state["cv_upload_error"] = (
-                    "Could not connect to the server. "
+                st.error(
+                    "Profile extraction is taking too long. "
                     "Please try again."
                 )
 
+
+            except requests.RequestException as e:
+
                 st.error(
-                    st.session_state["cv_upload_error"]
-                )
-
-
-        # --------------------------------------------------
-        # Portfolio
-        # Optional extra source
-        # --------------------------------------------------
-
-        st.divider()
-
-        portfolio_url = portfolio_section()
-
-
-        # --------------------------------------------------
-        # Continue to Profile Review
-        # --------------------------------------------------
-
-        if st.button(
-            "Continue",
-            type="primary",
-            use_container_width=True,
-        ):
-
-            # CV must be processed first
-            if not st.session_state.get(
-                "cv_uploaded",
-                False,
-            ):
-
-                st.warning(
-                    "Please upload and process your CV first."
-                )
-
-
-            # --------------------------------------------------
-            # Portfolio URL was provided
-            # --------------------------------------------------
-
-            elif portfolio_url:
-
-                try:
-
-                    with st.spinner(
-                        "Extracting your portfolio..."
-                    ):
-
-                        response = requests.post(
-                            "http://127.0.0.1:8000/api/users/me/portfolio",
-                            json={
-                                "url": portfolio_url
-                            },
-                            headers={
-                                "Authorization": f"Bearer {token}"
-                            },
-                            timeout=60,
-                        )
-
-
-                    # Portfolio successfully processed
-                    if response.status_code == 200:
-
-                        data = response.json()
-
-                        # Save extracted portfolio profile
-                        st.session_state["portfolio_profile"] = (
-                            data["profile"]["profile"]
-                        )
-
-                        # Save extraction warnings
-                        st.session_state["portfolio_warnings"] = (
-                            data["profile"].get(
-                                "extraction_warnings",
-                                [],
-                            )
-                        )
-
-                        # Go to Profile Review
-                        st.switch_page(
-                            "pages/profile_review.py"
-                        )
-
-
-                    # Portfolio backend error
-                    else:
-
-                        st.error(
-                            "Portfolio extraction failed. "
-                            f"Status: {response.status_code}"
-                        )
-
-                        st.code(
-                            response.text
-                        )
-
-
-                except requests.Timeout:
-
-                    st.error(
-                        "Portfolio extraction is taking too long. "
-                        "Please try again."
-                    )
-
-
-                except requests.RequestException as e:
-
-                    st.error(
-                        "Could not connect to the "
-                        f"CareerCompass API: {e}"
-                    )
-
-
-            # --------------------------------------------------
-            # No portfolio URL
-            # Portfolio is optional, continue with CV only
-            # --------------------------------------------------
-
-            else:
-
-                st.switch_page(
-                    "pages/profile_review.py"
+                    "Could not connect to the "
+                    f"CareerCompass API: {e}"
                 )
