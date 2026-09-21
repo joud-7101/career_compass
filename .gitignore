@@ -11,3 +11,8 @@ career_compass.db
 .vscode/
 
 data/raw/
+
+data/resumes/
+
+.venv312/
+career_compass_backup.db

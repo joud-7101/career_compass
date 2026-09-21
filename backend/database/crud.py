@@ -3,6 +3,7 @@ from sqlmodel import Session, select
 
 from backend.database.models import User, UserProfile, ProfileReview
 
+
 def get_user_by_email(session: Session, email: str):
     statement = select(User).where(User.email == email)
     return session.exec(statement).first()
@@ -69,7 +70,8 @@ def get_user_profile(session: Session, user_id: int):
         UserProfile.user_id == user_id
     )
 
-    return session.exec(statement).first() 
+    return session.exec(statement).first()
+
 
 def create_or_update_profile_review(
     session: Session,

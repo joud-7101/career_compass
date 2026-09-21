@@ -32,7 +32,7 @@ def create_access_token(user_id: int) -> str:
 
     return jwt.encode(
         payload,
-        settings.openai_api_key,
+        settings.jwt_secret_key,
         algorithm=ALGORITHM,
     )
 

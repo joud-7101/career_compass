@@ -97,3 +97,4 @@ def get_required_skills(job_title: str) -> dict:
         "matched_title": matched_title,
         "required_skills": required_skills
     }
+    

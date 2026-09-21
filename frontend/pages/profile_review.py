@@ -1,5 +1,6 @@
 import streamlit as st
 from pathlib import Path
+import requests
 
 from components.profile import render_profile_editor
 
@@ -12,6 +13,8 @@ st.set_page_config(
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 st.html(ASSETS / "home.css")
+
+API_BASE = "http://127.0.0.1:8000"
 
 
 # --------------------------------------------------
@@ -68,9 +71,48 @@ with center:
     updated_profile = render_profile_editor(profile_data)
 
 
-if updated_profile:
-    st.session_state["profile"] = updated_profile.model_dump(
-        mode="json"
-    )
+# --------------------------------------------------
+# When the user clicks "Save & Continue", persist to
+# the backend and redirect to the dashboard.
+# --------------------------------------------------
 
-    st.switch_page("app.py")
+if updated_profile:
+    # Save into session state
+    profile_dict = updated_profile.model_dump(mode="json")
+    st.session_state["profile"] = profile_dict
+
+    # If we have a token, persist to the backend
+    token = st.session_state.get("token")
+
+    if token:
+        try:
+            with st.spinner("Saving your profile..."):
+                response = requests.post(
+                    f"{API_BASE}/api/auth/profile",
+                    json=profile_dict,
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=20,
+                )
+
+            if response.status_code == 200:
+                st.switch_page("pages/dashboard.py")
+            else:
+                st.error(
+                    f"Could not save profile to server "
+                    f"(status {response.status_code}). "
+                    "You can still continue to the dashboard."
+                )
+                if st.button("Continue to Dashboard anyway"):
+                    st.switch_page("pages/dashboard.py")
+
+        except requests.RequestException as e:
+            st.error(
+                f"Could not reach the CareerCompass API: {e}. "
+                "Your profile is saved locally — you can still continue."
+            )
+            if st.button("Continue to Dashboard anyway"):
+                st.switch_page("pages/dashboard.py")
+
+    else:
+        # No token (guest flow) — go straight to dashboard
+        st.switch_page("pages/dashboard.py")

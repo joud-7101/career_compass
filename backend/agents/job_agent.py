@@ -30,7 +30,23 @@ llm_with_tools = llm.bind_tools([
 
 
 def job_agent(state: CareerState):
-    user_profile = state.get("user_profile", {})
+
+    user_profile = state.get("user_profile")
+    if not user_profile:
+        name = ""
+        education = ""
+        experience = []
+        skills = []
+        interests = []
+        location = ""
+    else:
+        name = getattr(user_profile.personal_information, "name", "")
+        location = getattr(user_profile.personal_information, "location", "")
+        education = user_profile.education
+        experience = user_profile.experience
+        skills = user_profile.skills
+        interests = [] # Schema has no interests by default, or you can add if needed
+
     query = state.get("query", "")
 
     prompt = f"""
@@ -41,12 +57,12 @@ that match the user's request and profile.
 
 USER PROFILE
 ------------
-Name: {user_profile.get("name", "")}
-Education: {user_profile.get("education", "")}
-Experience: {user_profile.get("experience", [])}
-Skills: {user_profile.get("skills", [])}
-Interests: {user_profile.get("interests", [])}
-Location: {user_profile.get("location", "")}
+Name: {name}
+Education: {education}
+Experience: {experience}
+Skills: {skills}
+Interests: {interests}
+Location: {location}
 
 USER REQUEST
 ------------
@@ -110,7 +126,11 @@ Return:
     messages = [HumanMessage(content=prompt)]
 
     response = llm_with_tools.invoke(messages)
-    structured_llm = llm.with_structured_output(JobAgentOutput)#for structured output of the job agent
+    # Pydantic serialization warning is suppressed process-wide
+    # in freelance_agent.py — see that file for the full explanation.
+    structured_llm = llm.with_structured_output(JobAgentOutput)
+
+    jobs = []
 
     jobs = []
 
