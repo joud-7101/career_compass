@@ -8,19 +8,18 @@ from backend.graph.state import CareerState
 from backend.config import settings
 
 from backend.tools.certification_search import (
-    search_certifications,
+    semantic_search_certifications,
     get_certification_blueprint,
 )
-
 from backend.tools.web_search import (
     search_certification_web,
 )
 
 from backend.schemas.career_response import (
     CertificationRecommendation,
-    MatchDetails,
 )
 from backend.schemas.profile import UserProfile
+
 
 llm = ChatOpenAI(
     model="gpt-4.1-mini",
@@ -34,13 +33,13 @@ llm = ChatOpenAI(
 # =========================================================
 
 
-class SearchKeywords(BaseModel):
-    keywords: list[str] = Field(
-        description=(
-            "Short professional certification search keywords "
-            "derived from the user's profile."
-        )
-    )
+# class SearchKeywords(BaseModel):
+#     keywords: list[str] = Field(
+#         description=(
+#             "Short professional certification search keywords "
+#             "derived from the user's profile."
+#         )
+#     )
 
 
 #     exam_id: str
@@ -52,19 +51,25 @@ class SearchKeywords(BaseModel):
 
 
 class CertificationRecommendationList(BaseModel):
-        recommendations: list[CertificationRecommendation]
+    recommendations: list[CertificationRecommendation] = Field(
+        min_length=20,
+        max_length=20,
+    )
 
 
-    # =========================================================
-    # Structured LLMs
-    # =========================================================
+# =========================================================
+# Structured LLMs
+# =========================================================
 
 # The Pydantic serialization warning is suppressed process-wide
 # in main.py via warnings.filterwarnings(). See that file for
 # the full explanation of why this warning occurs.
-keyword_llm = llm.with_structured_output(SearchKeywords)
 
-recommendation_llm = llm.with_structured_output(CertificationRecommendationList)
+# keyword_llm = llm.with_structured_output(SearchKeywords)
+
+recommendation_llm = llm.with_structured_output(
+    CertificationRecommendationList
+)
 
 
 # =========================================================
@@ -72,85 +77,60 @@ recommendation_llm = llm.with_structured_output(CertificationRecommendationList)
 # =========================================================
 
 
-def get_candidate_certifications(profile: UserProfile) -> list[dict]:
-    """
-    Generate search keywords from the user profile,
-    then search Cert Atlas for matching certifications.
-    """
+def get_candidate_certifications(
+    profile: UserProfile,
+) -> list[dict]:
 
     education = [
-        {
-            "institution": edu.institution,
-            "degree": edu.degree,
-            "field_of_study": edu.field_of_study,
-        }
+        " ".join(
+            filter(
+                None,
+                [
+                    edu.degree,
+                    edu.field_of_study,
+                ],
+            )
+        )
         for edu in profile.education
     ]
 
     experience = [
-        {
-            "title": exp.title,
-            "company": exp.company,
-            "description": exp.description,
-            "skills": exp.skills,
-        }
+        " ".join(
+            filter(
+                None,
+                [
+                    exp.title,
+                    exp.description,
+                    " ".join(exp.skills or []),
+                ],
+            )
+        )
         for exp in profile.experience
     ]
 
-    skills = [skill.name for skill in profile.skills]
+    skills = [
+        skill.name
+        for skill in profile.skills
+    ]
 
-    keyword_prompt = f"""
-You are helping search a professional certification database.
+    profile_text = f"""
+Professional Summary:
+{profile.professional_summary or ""}
 
-USER PROFILE
-------------
 Education:
-{education}
+{" | ".join(education)}
 
 Experience:
-{experience}
+{" | ".join(experience)}
 
 Skills:
-{skills}
-
-
-
-Create short search keywords that can be used to find
-relevant professional certifications.
-
-Examples of good keywords:
-- AWS
-- Azure
-- Power BI
-- Data
-- Cloud
-- Security
-- Python
-- Project Management
-
-Rules:
-- Return professional or technical search keywords only.
-- Do not return certification names.
-- Do not invent certifications.
-- Keywords should be based only on the user's profile.
+{", ".join(skills)}
 """
 
-    keyword_result = keyword_llm.invoke(keyword_prompt)
-
-    candidates = {}
-
-    for keyword in keyword_result.keywords:
-
-        results = search_certifications(keyword)
-
-        for exam in results:
-
-            exam_id = exam.get("exam_id")
-
-            if exam_id:
-                candidates[exam_id] = exam
-
-    return list(candidates.values())
+    return semantic_search_certifications(
+        profile_text,
+        top_k=20,
+    )
 
 
 # =========================================================
@@ -165,7 +145,9 @@ def recommend_certifications(state: CareerState) -> dict:
     if not profile:
         return {
             "certifications": [],
-            "certification_analysis": ("No user profile was provided."),
+            "certification_analysis": (
+                "No user profile was provided."
+            ),
         }
 
     # -----------------------------------------------------
@@ -191,13 +173,18 @@ def recommend_certifications(state: CareerState) -> dict:
         for exp in profile.experience
     ]
 
-    skills = [skill.name for skill in profile.skills]
+    skills = [
+        skill.name
+        for skill in profile.skills
+    ]
 
     # -----------------------------------------------------
     # Find certification candidates
     # -----------------------------------------------------
 
-    candidates = get_candidate_certifications(profile)
+    candidates = get_candidate_certifications(
+        profile
+    )
 
     if not candidates:
 
@@ -230,11 +217,21 @@ def recommend_certifications(state: CareerState) -> dict:
     # Recommendation prompt
     # -----------------------------------------------------
 
+    # prompt = f"""
+    # You are the Certification Agent for Career Compass.
+    #
+    # Your task is to select professional certifications
+    # that are suitable for the user.
+    #
+    # USER PROFILE
+
     prompt = f"""
 You are the Certification Agent for Career Compass.
 
-Your task is to select professional certifications
-that are suitable for the user.
+Your task is to evaluate and rank the 20 professional
+certifications retrieved as most relevant to the user.
+
+You MUST return all 20 certifications.
 
 USER PROFILE
 ------------
@@ -252,21 +249,25 @@ USER REQUEST
 ------------
 {state.get("query", "")}
 
-CERTIFICATIONS FOUND IN CERT ATLAS
-----------------------------------
+TOP 20 RELEVANT CERTIFICATION CANDIDATES FROM CERT ATLAS
+--------------------------------------------------------
 {candidate_text}
 
 IMPORTANT RULES
 ---------------
-
+- You are given exactly 20 certification candidates retrieved from Cert Atlas.
+- Evaluate ALL 20 candidates.
+- Return ALL 20 candidates in the final recommendations.
+- Do not omit any candidate.
+- Rank them from most suitable to least suitable for the user.
 - Recommend only certifications listed above.
 - Never invent a certification.
 - Keep the exact exam_id from Cert Atlas.
-- Recommend every certification that is meaningfully
-relevant to the user's profile.
-- Do not force a fixed number of recommendations.
-- Exclude certifications that are clearly unrelated.
+- Keep the exact certification name from Cert Atlas.
+- Keep the exact provider from Cert Atlas.
+- Keep the exact exam code from Cert Atlas.
 - Avoid duplicate certifications.
+- Every one of the 20 candidate exam IDs must appear exactly once.
 
 Consider:
 - Education
@@ -277,6 +278,7 @@ Consider:
 
 For every recommended certification provide:
 
+- exam_id
 - name
 - provider
 - exam_code
@@ -295,8 +297,163 @@ Priority must be one of:
 
     result = recommendation_llm.invoke(prompt)
 
-    # Keep Pydantic models
-    recommendations = result.recommendations
+    # -----------------------------------------------------
+    # Keep ALL 20 Cert Atlas candidates
+    # LLM is used only for evaluation/ranking information
+    # -----------------------------------------------------
+
+    llm_by_id = {
+        str(item.exam_id).strip().lower(): item
+        for item in result.recommendations
+        if item.exam_id
+    }
+
+    recommendations = []
+
+    for exam in candidates:
+
+        exam_id = exam.get("exam_id")
+
+        if not exam_id:
+            continue
+
+        llm_result = llm_by_id.get(
+            str(exam_id).strip().lower()
+        )
+
+        if llm_result:
+
+            recommendation = llm_result.model_copy(
+                update={
+                    "exam_id": exam_id,
+                    "name": exam.get("exam_name"),
+                    "provider": exam.get("certifying_body"),
+                    "exam_code": exam.get("exam_code"),
+                    "url": exam.get("source_url"),
+                }
+            )
+
+        else:
+
+            # If the LLM failed to return this candidate,
+            # do NOT delete it.
+            # It was already selected by semantic retrieval
+            # as one of the user's Top 20 matches.
+
+            recommendation = CertificationRecommendation(
+                exam_id=exam_id,
+                name=exam.get("exam_name") or "Certification",
+                provider=exam.get("certifying_body") or "Unknown",
+                exam_code=exam.get("exam_code"),
+                url=exam.get("source_url"),
+                priority="medium",
+                match={
+                    "score": None,
+                    "matching_skills": [],
+                    "missing_skills": [],
+                    "explanation": (
+                        "Selected as one of the top certifications "
+                        "matched to your profile."
+                    ),
+                },
+            )
+
+        recommendations.append(
+            recommendation
+        )
+
+    # -----------------------------------------------------
+    # Sort evaluated results first
+    # -----------------------------------------------------
+
+    recommendations.sort(
+        key=lambda item: (
+            item.match.score
+            if item.match.score is not None
+            else 0
+        ),
+        reverse=True,
+    )
+
+    # Safety: return exactly the Top 20
+    recommendations = recommendations[:20]
+
+    print(
+        f"[DEBUG] Certification Agent returning "
+        f"{len(recommendations)} recommendations"
+    )
+
+    return {
+        "certifications": recommendations,
+    }
+
+    # -----------------------------------------------------
+    # Validate LLM recommendations against Cert Atlas
+    # -----------------------------------------------------
+
+    candidate_by_id = {
+        exam["exam_id"]: exam
+        for exam in candidates
+        if exam.get("exam_id")
+    }
+
+    recommendations = []
+    seen = set()
+
+    for recommendation in result.recommendations:
+
+        exam_id = recommendation.exam_id
+
+        # Must actually exist in the retrieved Cert Atlas results
+        if exam_id not in candidate_by_id:
+            continue
+
+        # Prevent duplicates
+        if exam_id in seen:
+            continue
+
+        exam = candidate_by_id[
+            exam_id
+        ]
+
+        recommendation = recommendation.model_copy(
+            update={
+                "exam_id": exam_id,
+                "name": exam.get(
+                    "exam_name"
+                ),
+                "provider": exam.get(
+                    "certifying_body"
+                ),
+                "exam_code": exam.get(
+                    "exam_code"
+                ),
+                "url": exam.get(
+                    "source_url"
+                ),
+            }
+        )
+
+        recommendations.append(
+            recommendation
+        )
+
+        seen.add(
+            exam_id
+        )
+
+    # -----------------------------------------------------
+    # Highest match score first
+    # -----------------------------------------------------
+
+    recommendations.sort(
+        key=lambda item: (
+            item.match.score
+            if item.match.score is not None
+            else 0
+        ),
+        reverse=True,
+    )
 
     return {
         "certifications": recommendations,
@@ -307,8 +464,10 @@ Priority must be one of:
     #     for recommendation
     #     in result.recommendations
     # ]
+
     # keeping them as pydantic models
-    recommendations = result.recommendations
+
+    # recommendations = result.recommendations
 
 
 # commented it because i've changed the structer
@@ -319,64 +478,104 @@ Priority must be one of:
 # =========================================================
 
 
-def prepare_selected_certification(state: CareerState) -> dict:
+def prepare_selected_certification(
+    state: CareerState,
+) -> dict:
 
-    selected_certification = state.get("selected_certification")
+    selected_certification = state.get(
+        "selected_certification"
+    )
 
-    current_level = state.get("current_level")
+    current_level = state.get(
+        "current_level"
+    )
 
-    exam_date_text = state.get("exam_date")
+    exam_date_text = state.get(
+        "exam_date"
+    )
 
     # -----------------------------------------
     # Validate inputs
     # -----------------------------------------
 
     if not selected_certification:
-        return {"certification_analysis": "No certification was selected."}
+        return {
+            "certification_analysis":
+                "No certification was selected."
+        }
 
     if not current_level:
-        return {"certification_analysis": "Current level is required."}
+        return {
+            "certification_analysis":
+                "Current level is required."
+        }
 
     if not exam_date_text:
-        return {"certification_analysis": "Exam date is required."}
+        return {
+            "certification_analysis":
+                "Exam date is required."
+        }
 
     # -----------------------------------------
     # Validate exam date
     # -----------------------------------------
 
     try:
-        exam_date = date.fromisoformat(exam_date_text)
+
+        exam_date = date.fromisoformat(
+            exam_date_text
+        )
 
     except ValueError:
+
         return {
-            "certification_analysis": ("Invalid exam date. " "Use YYYY-MM-DD format.")
+            "certification_analysis": (
+                "Invalid exam date. "
+                "Use YYYY-MM-DD format."
+            )
         }
 
     today = date.today()
 
-    days_remaining = (exam_date - today).days
+    days_remaining = (
+        exam_date - today
+    ).days
 
     if days_remaining < 0:
-        return {"certification_analysis": "Exam date cannot be in the past."}
+
+        return {
+            "certification_analysis":
+                "Exam date cannot be in the past."
+        }
 
     # -----------------------------------------
     # Cert Atlas
     # -----------------------------------------
 
-    blueprint = get_certification_blueprint(selected_certification)
+    blueprint = get_certification_blueprint(
+        selected_certification
+    )
 
     if blueprint is None:
+
         return {
             "certification_analysis": (
-                "The selected certification " "could not be found in Cert Atlas."
+                "The selected certification "
+                "could not be found in Cert Atlas."
             )
         }
 
-    exam_name = blueprint.get("exam_name")
+    exam_name = blueprint.get(
+        "exam_name"
+    )
 
-    exam_code = blueprint.get("exam_code")
+    exam_code = blueprint.get(
+        "exam_code"
+    )
 
-    certifying_body = blueprint.get("certifying_body")
+    certifying_body = blueprint.get(
+        "certifying_body"
+    )
 
     # -----------------------------------------
     # Official Web Search
@@ -486,9 +685,14 @@ STRICT RULES
 - Keep the response clear and practical.
 """
 
-    response = llm.invoke(prompt)
+    response = llm.invoke(
+        prompt
+    )
 
-    return {"certification_analysis": response.content}
+    return {
+        "certification_analysis":
+            response.content
+    }
 
 
 # =========================================================
@@ -496,13 +700,22 @@ STRICT RULES
 # =========================================================
 
 
-def certification_agent(state: CareerState):
+def certification_agent(
+    state: CareerState,
+):
 
-    selected_certification = state.get("selected_certification")
+    selected_certification = state.get(
+        "selected_certification"
+    )
 
     # Stage 1
     if not selected_certification:
-        return recommend_certifications(state)
+
+        return recommend_certifications(
+            state
+        )
 
     # Stage 2
-    return prepare_selected_certification(state)
+    return prepare_selected_certification(
+        state
+    )
