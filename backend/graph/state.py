@@ -1,10 +1,15 @@
-from typing import Annotated
-import operator
-
+from typing import  Annotated,Literal
 from typing_extensions import TypedDict
+from operator import add
 
+from backend.schemas.career_response import (
+    JobOpportunity,
+    CertificationRecommendation,
+    FreelanceProject,
+    AgentIssue,
+)
 
-from typing import TypedDict, Literal
+from backend.schemas.profile import UserProfile
 
 
 AgentName = Literal[
@@ -13,23 +18,30 @@ AgentName = Literal[
     "freelance"
 ]
 
-# User information shared between agents
-class UserProfile(TypedDict, total=False):
-    name: str
-    education: str
-    experience: list[str]
-    skills: list[str]
-    interests: list[str]
-    location: str
+
+
+# # User information shared between agents
+
+# class CareerState(TypedDict, total=False):
+
+#     user_id: str
+#     query: str
+
+#     user_profile: UserProfile
+
+
+
+from backend.schemas.profile import UserProfile
 
 
 class CareerState(TypedDict, total=False):
 
     # -------------------------
-    # User/session
+    # User / session
     # -------------------------
 
     user_id: str
+    request_id: str
     query: str
 
     # -------------------------
@@ -38,6 +50,7 @@ class CareerState(TypedDict, total=False):
 
     user_profile: UserProfile
 
+
     # -------------------------
     # Orchestrator
     # -------------------------
@@ -45,19 +58,75 @@ class CareerState(TypedDict, total=False):
     requested_agents: list[AgentName]
 
     # -------------------------
-    # Agent outputs
+    # Certification inputs
     # -------------------------
 
-    job_analysis: str
-    certification_analysis: str
-    freelance_analysis: str
+    selected_certification: str
 
-    jobs: list[dict]
-    certifications: list[dict]
-    freelance_projects: list[dict]
+    certification_recommendations: list[dict]
 
+    selected_certification: str
+    current_level: Literal[
+        "Beginner",
+        "Intermediate",
+        "Advanced"
+    ]
+    exam_date: str
+
+    # -------------------------
+    # Certification pagination
+    # -------------------------
+
+    offset: int
+    limit: int
+    
+    # -------------------------
+    # Structured Agent outputs
+    # -------------------------
+
+    jobs: list[JobOpportunity]
+    certifications: list[CertificationRecommendation]
+    freelance_projects: list[FreelanceProject]
+        # -------------------------
+    # Errors / warnings
+    # -------------------------
+
+
+
+
+    issues: list[AgentIssue]
+
+    certification_recommendations: list[dict]
+
+    
+    current_level: Literal[
+        "Beginner",
+        "Intermediate",
+        "Advanced"
+    ]
+    exam_date: str
+    
+    # -------------------------
+    # Structured Agent outputs
+    # -------------------------
+
+    jobs: list[JobOpportunity]
+    certifications: list[CertificationRecommendation]
+    freelance_projects: list[FreelanceProject]
+    # -----------------------------------------------------
+    # Errors / warnings
+    #
+    # `add` allows multiple parallel agents to contribute
+    # issues without overwriting each other.
+    # -----------------------------------------------------
+
+    issues: Annotated[
+        list[AgentIssue],
+        add,
+    ]
     # -------------------------
     # Final output
     # -------------------------
-
     final_response: str
+#new archture
+#     final_response: str

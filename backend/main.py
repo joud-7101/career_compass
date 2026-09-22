@@ -1,7 +1,33 @@
+# ─────────────────────────────────────────────────────────────────
+# Suppress a harmless Pydantic serialization warning.
+#
+# LangChain's with_structured_output() stores parsed Pydantic models
+# in AIMessage.parsed, which is internally typed as Optional[None].
+# Pydantic sees a real model where it expected None and emits:
+#
+#   PydanticSerializationUnexpectedValue(Expected `none` …)
+#
+# The warning is harmless — the data is always parsed correctly.
+# We filter it here (before any agent imports) so it's active
+# process-wide for every agent that uses with_structured_output().
+# ─────────────────────────────────────────────────────────────────
+import warnings
+warnings.filterwarnings(
+    "ignore",
+    message="Pydantic serializer warnings",
+    category=UserWarning,
+    module=r"pydantic\.main",
+)
+
 from fastapi import FastAPI, Depends
 from sqlmodel import Session
 
 from backend.routers.auth import router as auth_router
+from backend.routers.portfolio import router as portfolio_router
+from backend.routers.career import router as career_router
+
+# Resume upload and CV processing routes
+from backend.routers.resume import router as resume_router
 
 from backend.database.database import (
     create_db_and_tables,
@@ -9,11 +35,15 @@ from backend.database.database import (
 )
 
 from backend.database.crud import (
+    create_user,
     get_user,
     get_user_profile,
 )
+from backend.schemas.career import (
+    CareerRequest,
+    UserProfileRequest
+    )
 
-from backend.schemas.career import CareerRequest
 from backend.graph.graph import career_graph
 
 
@@ -23,7 +53,9 @@ app = FastAPI(
 )
 
 app.include_router(auth_router)
-
+app.include_router(portfolio_router)
+app.include_router(career_router)
+app.include_router(resume_router)
 
 @app.on_event("startup")
 def startup():
@@ -66,6 +98,25 @@ def career_assistant(
         "location": profile.location if profile else "",
     }
 
+    user = get_user(
+        session=session,
+        user_id=request.user_id
+    )
+
+    if not user:
+        return {
+            "error": "User not found"
+        }
+
+    user_profile = {
+        "name": user.name,
+        "education": user.education or "",
+        "experience": user.experience.split(",") if user.experience else [],
+        "skills": user.skills.split(",") if user.skills else [],
+        "interests": user.interests.split(",") if user.interests else [],
+        "location": user.location or ""
+    }
+
     initial_state = {
         "user_id": request.user_id,
         "query": request.query,
@@ -73,10 +124,21 @@ def career_assistant(
     }
 
     result = career_graph.invoke(initial_state)
+    result = career_graph.invoke(initial_state)
+    print("\n================ GRAPH RESULT ================")
+    print(result)
+    print("================================================\n")
 
     return {
-        "response": result.get("final_response", ""),
-        "jobs": result.get("jobs", []),
-        "certifications": result.get("certifications", []),
-        "freelance_projects": result.get("freelance_projects", []),
+    "response": result.get("final_response", ""),
+    "jobs": result.get("jobs", []),
+    "certifications": result.get("certifications", []),
+    "freelance_projects": result.get("freelance_projects", []),
     }
+
+    # return {
+    #     "response": result.get("final_response", ""),
+    #     "jobs": result.get("jobs", []),
+    #     "certifications": result.get("certifications", []),
+    #     "freelance_projects": result.get("freelance_projects", []),
+    # }

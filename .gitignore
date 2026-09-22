@@ -4,10 +4,12 @@ __pycache__/
 
 .env
 
-career_compass.db
-
 .ipynb_checkpoints/
 
 .vscode/
 
 data/raw/
+
+data/resumes/
+
+.venv312/
