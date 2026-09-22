@@ -24,6 +24,7 @@ from backend.agents.certification_agent2 import (
 # generate_proposal() creates the first draft; chat_with_proposal()
 # handles follow-up refinement messages from the user.
 from backend.agents.proposal_agent import generate_proposal, chat_with_proposal
+from backend.schemas.career_response import CVTailoringResponse
 
 router = APIRouter(
     prefix="/api/career",
@@ -105,6 +106,87 @@ def get_job_recommendations(
         "jobs": result.get("jobs", []),
         "analysis": result.get("job_analysis", ""),
     }
+
+
+# ==================================================
+# CV TAILORING endpoint
+# ==================================================
+
+class CVTailoringRequest(BaseModel):
+    job_title: str
+    job_description: str
+
+
+@router.post("/jobs/tailor-cv")
+def tailor_cv_for_job(
+    request: CVTailoringRequest,
+    user_id: int = Depends(get_current_user_id),
+    session: Session = Depends(get_session),
+):
+    user = get_user(session, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
+    profile = load_agent_profile(user_id,session,)
+
+    # CV tailoring assistant
+    from openai import OpenAI
+    client = OpenAI()
+    tailoring_prompt = f"""
+    You are a CV tailoring assistant.
+    Analyze the user's existing profile against the target job.
+
+    TARGET JOB:
+    Title: {request.job_title}
+
+    Description:
+    {request.job_description}
+
+    USER PROFILE:
+    {json.dumps(profile.model_dump(mode="json"), ensure_ascii=False, indent=2)}
+
+    Your task:
+    1. Estimate an ATS match score from 0 to 100.
+    2. Suggest only realistic changes to the existing CV.
+    3. Focus mainly on:
+    - Professional title
+    - Professional summary
+    - Skills to emphasize
+    - Experience/projects to emphasize
+    4. Do NOT invent skills, experience, education, certifications, or achievements.
+    5. Only recommend keywords that are supported by the user's existing profile.
+    6. Never change factual personal information such as graduation status, degree, GPA, dates, employers, job titles, or certifications. Preserve the user's actual profile facts exactly.
+    7. Keep suggestions concise and practical.
+
+    Return ONLY valid JSON matching this structure:
+    {{
+        "ats_match": 0,
+        "job_title": "{request.job_title}",
+        "suggestions": [
+            {{
+                "category": "summary",
+                "current": "...",
+                "suggested": "...",
+                "reason": "..."
+            }}
+        ],
+        "keywords_to_emphasize": [],
+        "missing_keywords": []
+    }}
+    """
+
+    response = client.responses.create(
+        model="gpt-5.6",
+        input=tailoring_prompt,
+    )
+
+    result = json.loads(response.output_text)
+
+    return CVTailoringResponse.model_validate(result)
+
 
 # ==================================================
 # FREELANCE endpoint

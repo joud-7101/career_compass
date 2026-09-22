@@ -199,46 +199,178 @@ if st.button(
 # JOB CARDS
 # =================================
 
-if not jobs and not analysis:
+if not jobs:
     st.info(
-        "No jobs found yet. Try refreshing, or make sure your profile "
-        "has skills and experience filled in."
+        "No active job listings were found for this search."
     )
-
-# --- Show each job card ---
 for i, job in enumerate(jobs):
     title = job.get("title", "Untitled Role")
     company = job.get("company", "")
     location = job.get("location", "")
-    job_type = job.get("job_type", "") or job.get("employment_type", "")
-    is_remote = job.get("is_remote", False)
-    job_url = job.get("job_url", "") or job.get("url", "")
-    description = job.get("description", "")
-    source = job.get("site", job.get("source", ""))
+    job_type = (
+        job.get("employment_type", "")
+        or job.get("job_type", "")
+    )
 
-    company_initial = (company[0].upper() if company else "J")
+    job_url = (
+        job.get("url", "")
+        or job.get("job_url", "")
+    )
 
-    # Determine employment type label
-    employment_label_parts = []
+    description = job.get(
+        "description",
+        ""
+    )
+
+    source = job.get(
+        "source",
+        ""
+    )
+
+    is_remote = job.get(
+        "is_remote",
+        False
+    )
+
+    # ---------------------------------
+    # Match data
+    # ---------------------------------
+
+    match = job.get(
+        "match",
+        {}
+    ) or {}
+
+    score = match.get(
+        "score"
+    )
+
+    matching_skills = match.get(
+        "matching_skills",
+        []
+    ) or []
+
+    missing_skills = match.get(
+        "missing_skills",
+        []
+    ) or []
+
+    explanation = match.get(
+        "explanation",
+        ""
+    )
+
+    # ---------------------------------
+    # Company initial
+    # ---------------------------------
+
+    company_initial = (
+        company[0].upper()
+        if company
+        else "J"
+    )
+
+    # ---------------------------------
+    # Employment label
+    # ---------------------------------
+
+    employment_parts = []
+
     if job_type:
-        employment_label_parts.append(str(job_type).replace("_", " ").title())
+        employment_parts.append(
+            str(job_type)
+            .replace("_", " ")
+            .title()
+        )
+
     if is_remote:
-        employment_label_parts.append("Remote")
-    employment_label = " · ".join(employment_label_parts) if employment_label_parts else "Full-time"
+        employment_parts.append(
+            "Remote"
+        )
 
-    with st.container(key=f"job_card_{i}", border=True):
+    if source:
+        employment_parts.append(
+            source.title()
+        )
 
-        top_left, top_right = st.columns([5, 1], vertical_alignment="top")
+    employment_label = (
+        " · ".join(employment_parts)
+        if employment_parts
+        else "Job opportunity"
+    )
+
+    # ---------------------------------
+    # Description snippet
+    # ---------------------------------
+
+    if description:
+        snippet = (
+            description
+            .replace("\n", " ")
+            .strip()
+        )
+
+        if len(snippet) > 220:
+            snippet = (
+                snippet[:220].strip()
+                + "…"
+            )
+    else:
+        snippet = ""
+
+
+    # ---------------------------------
+    # Job card
+    # ---------------------------------
+
+    with st.container(
+        key=f"job_card_{i}",
+        border=True
+    ):
+
+        # =============================
+        # Header
+        # =============================
+
+        top_left, top_right = st.columns(
+            [5, 1],
+            vertical_alignment="top"
+        )
 
         with top_left:
             st.html(
                 f"""
-                <div style="display:flex; align-items:flex-start; gap:14px;">
-                    <div class="cc-job-company-icon">{company_initial}</div>
+                <div style="
+                    display:flex;
+                    align-items:flex-start;
+                    gap:14px;
+                ">
+                    <div class="cc-job-company-icon">
+                        {company_initial}
+                    </div>
                     <div>
-                        <div class="cc-profile-value" style="font-size:18px; margin:0;">{title}</div>
-                        <div class="cc-profile-detail" style="margin:2px 0 0;">
-                            {company}{' · ' + location if location else ''}
+                        <div
+                            class="cc-profile-value"
+                            style="
+                                font-size:18px;
+                                margin:0;
+                            "
+                        >
+                            {title}
+                        </div>
+
+                        <div
+                            class="cc-profile-detail"
+                            style="
+                                margin:3px 0 0;
+                            "
+                        >
+                            {company}
+                            {
+                                " · " + location
+                                if location
+                                else ""
+                            }
                         </div>
                     </div>
                 </div>
@@ -246,87 +378,265 @@ for i, job in enumerate(jobs):
             )
 
         with top_right:
-            st.html('<div class="cc-match-badge">Match</div>')
+            if score is not None:
+                st.html(
+                    f'<div class="cc-match-badge">{score}% Match</div>'
+                )
+            else:
+                st.html(
+                    '<div class="cc-match-badge">Match</div>'
+                )
 
-        # Description snippet
-        if description:
-            snippet = description[:220].strip()
-            if len(description) > 220:
-                snippet += "…"
+            with st.popover("Tailor CV", use_container_width=True):
+
+                st.markdown("### Tailor Your CV")
+
+                st.caption(
+                    f"{title} · {company}"
+                )
+
+                if not description:
+                    st.warning(
+                        "This job does not provide a description, "
+                        "so tailoring suggestions may be limited."
+                    )
+
+                if st.button(
+                    "Generate Suggestions",
+                    key=f"generate_tailor_{i}",
+                    type="primary",
+                    use_container_width=True,
+                ):
+
+                    with st.spinner("Analyzing your CV against this job..."):
+
+                        try:
+                            tailor_resp = requests.post(
+                                f"{API_BASE}/api/career/jobs/tailor-cv",
+                                json={
+                                    "job_title": title,
+                                    "job_description": description or "",
+                                },
+                                headers={
+                                    "Authorization": f"Bearer {token}"
+                                },
+                                timeout=120,
+                            )
+
+                            if tailor_resp.status_code == 200:
+
+                                tailor_result = tailor_resp.json()
+
+                                st.session_state[
+                                    f"tailor_result_{i}"
+                                ] = tailor_result
+
+                            else:
+                                st.error(
+                                    f"Tailoring failed "
+                                    f"(status {tailor_resp.status_code}): "
+                                    f"{tailor_resp.text}"
+                                )
+
+                        except requests.RequestException as e:
+                            st.error(
+                                f"Could not reach the API: {e}"
+                            )
+
+                tailor_result = st.session_state.get(
+                    f"tailor_result_{i}"
+                )
+
+                if tailor_result:
+
+                    st.divider()
+
+                    st.metric(
+                        "ATS Match",
+                        f"{tailor_result.get('ats_match', 0)}%"
+                    )
+
+                    keywords = tailor_result.get(
+                        "keywords_to_emphasize",
+                        []
+                    )
+
+                    if keywords:
+                        st.markdown("**Keywords to emphasize**")
+
+                        st.write(
+                            ", ".join(keywords)
+                        )
+
+                    missing_keywords = tailor_result.get(
+                        "missing_keywords",
+                        []
+                    )
+
+                    if missing_keywords:
+                        st.markdown("**Missing keywords**")
+
+                        st.write(
+                            ", ".join(missing_keywords)
+                        )
+
+                    suggestions = tailor_result.get(
+                        "suggestions",
+                        []
+                    )
+
+                    if suggestions:
+                        st.markdown("**Suggested changes**")
+
+                        for suggestion in suggestions:
+
+                            st.markdown(
+                                f"**{suggestion.get('category', 'Suggestion').title()}**"
+                            )
+
+                            if suggestion.get("current"):
+                                st.caption(
+                                    f"Current: {suggestion['current']}"
+                                )
+
+                            st.write(
+                                suggestion.get("suggested", "")
+                            )
+
+                            st.caption(
+                                suggestion.get("reason", "")
+                            )
+
+        # =============================
+        # Description
+        # =============================
+
+        if snippet:
             st.write(snippet)
 
-        # Skill badges from user's matching skills
-        if top_3_skills:
+        # =============================
+        # Matching skills
+        # =============================
+
+        if matching_skills:
+
             badges = "".join(
-                f'<span class="cc-skill-badge">{s}</span>'
-                for s in top_3_skills
+                f'''
+                <span class="cc-skill-badge">
+                    {skill}
+                </span>
+                '''
+                for skill in matching_skills[:5]
             )
-            st.html(f'<div class="cc-skill-badges" style="margin:4px 0 8px;">{badges}</div>')
 
-        # "Why it matches you" callout — use agent analysis for first card, generic for rest
-        if i == 0 and analysis:
-            # Use first ~400 chars of agent analysis
-            analysis_snippet = analysis[:400].strip()
-            if len(analysis) > 400:
-                analysis_snippet += "…"
             st.html(
-                f"""
-                <div class="cc-why-matches">
-                    <div class="cc-why-title">Why it matches you</div>
-                    <div class="cc-why-text">{analysis_snippet}</div>
+                f'''
+                <div
+                    class="cc-skill-badges"
+                    style="margin:8px 0;"
+                >
+                    {badges}
                 </div>
-                """
+                '''
             )
-        else:
-            # Generic match reason
-            matched = ", ".join(top_3_skills[:3]) if top_3_skills else "your profile"
+
+        # =============================
+        # Why it matches
+        # =============================
+
+        if explanation:
+
             st.html(
                 f"""
                 <div class="cc-why-matches">
-                    <div class="cc-why-title">Why it matches you</div>
-                    <div class="cc-why-text">
-                        Your experience as {current_role} and skills in {matched}
-                        align with the requirements of this role.
+
+                    <div class="cc-why-title">
+                        Why it matches
                     </div>
+
+                    <div class="cc-why-text">
+                        {explanation}
+                    </div>
+
                 </div>
                 """
             )
 
-        # Footer row
-        footer_left, footer_right = st.columns([2, 2], vertical_alignment="center")
+        # =============================
+        # Skill gaps
+        # =============================
+
+        if missing_skills:
+
+            missing_text = ", ".join(
+                str(skill)
+                for skill in missing_skills[:5]
+            )
+
+            st.html(
+                f"""
+                <div
+                    style="
+                        margin-top:10px;
+                        padding:10px 12px;
+                        border-radius:8px;
+                        background:#fafafa;
+                    "
+                >
+
+                    <div
+                        style="
+                            font-weight:600;
+                            margin-bottom:4px;
+                        "
+                    >
+                        Skill gaps
+                    </div>
+
+                    <div
+                        style="
+                            font-size:14px;
+                        "
+                    >
+                        {missing_text}
+                    </div>
+
+                </div>
+                """
+            )
+
+        # =============================
+        # Footer
+        # =============================
+
+        footer_left, footer_right = st.columns(
+            [2, 1],
+            vertical_alignment="center"
+        )
 
         with footer_left:
-            st.caption(employment_label)
+
+            st.caption(
+                employment_label
+            )
 
         with footer_right:
-            btn_save, btn_view = st.columns(2)
 
-            with btn_save:
-                st.button(
-                    "Save",
-                    key=f"job_save_{i}",
+            if job_url:
+
+                st.link_button(
+                    "View Job ↗",
+                    url=str(job_url),
+                    type="primary",
                     use_container_width=True
                 )
 
-            with btn_view:
-                if job_url:
-                    st.link_button(
-                        "View details ↗",
-                        url=str(job_url),
-                        type="primary",
-                        use_container_width=True
-                    )
-                else:
-                    st.button(
-                        "View details ↗",
-                        key=f"job_view_{i}",
-                        type="primary",
-                        use_container_width=True,
-                        disabled=True
-                    )
+            else:
 
-
-# --- If no structured jobs but analysis exists, show analysis ---
-if not jobs and analysis:
-    st.subheader("Agent Recommendations")
-    st.markdown(analysis)
+                st.button(
+                    "View Job ↗",
+                    key=f"job_view_{i}",
+                    type="primary",
+                    use_container_width=True,
+                    disabled=True
+                    )

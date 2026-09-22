@@ -22,6 +22,9 @@ class JobOpportunity(BaseModel):
     url: str | None = None
     employment_type: str | None = None
     source: str
+    is_remote: bool = False
+    date_posted: str | None = None
+    description: str | None = None
     match: MatchDetails
 
 
@@ -67,3 +70,23 @@ class CareerResponse(BaseModel):
     freelance_projects: list[FreelanceProject] = Field(default_factory=list)
     issues: list[AgentIssue] = Field(default_factory=list)
 
+
+class CVTailoringSuggestion(BaseModel):
+    category: str
+    current: str | None = None
+    suggested: str
+    reason: str
+
+
+class CVTailoringResponse(BaseModel):
+    ats_match: int
+    job_title: str
+    suggestions: list[CVTailoringSuggestion] = Field(
+        default_factory=list
+    )
+    keywords_to_emphasize: list[str] = Field(
+        default_factory=list
+    )
+    missing_keywords: list[str] = Field(
+        default_factory=list
+    )
