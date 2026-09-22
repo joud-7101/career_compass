@@ -1,339 +1,353 @@
+from html import escape
 from pathlib import Path
-import streamlit as st
-import requests
 
-# ---------------------------------
-# Page settings
-# ---------------------------------
+import requests
+import streamlit as st
 
 st.set_page_config(
     page_title="Certifications | CareerCompass",
     page_icon=":material/workspace_premium:",
-    layout="wide"
+    layout="wide",
 )
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
-st.html(ASSETS / "home.css")
-logo = ASSETS / "logo.png"
 API_BASE = "http://127.0.0.1:8000"
+PAGE_SIZE = 10
 
-
-# ---------------------------------
-# Auth guard
-# ---------------------------------
+st.html(ASSETS / "home.css")
+st.html("""
+<style>
+.cert-name {
+    color: #0B2E4F;
+    font-size: 20px;
+    font-weight: 700;
+}
+.cert-meta {
+    color: #627D98;
+    font-size: 14px;
+    margin: 6px 0 12px;
+}
+.cert-pill {
+    display: inline-block;
+    background: #E6F7F2;
+    color: #16705A;
+    padding: 4px 9px;
+    border-radius: 8px;
+    margin: 3px;
+    font-size: 12px;
+}
+</style>
+""")
 
 token = st.session_state.get("token")
+
 if not token:
-    st.warning("Please sign in to view your certification recommendations.")
+    st.warning("Please sign in to view certifications.")
     if st.button("Sign in", type="primary"):
         st.switch_page("pages/sign_in.py")
     st.stop()
 
-
-# =================================
-# NAVBAR
-# =================================
+# Prevent cached results from a previous signed-in session being reused.
+if st.session_state.get("cert_stage1_owner") != token:
+    st.session_state["cert_stage1_owner"] = token
+    st.session_state["cert_stage1_pages"] = {}
+    st.session_state["cert_stage1_offset"] = 0
+    st.session_state["cert_stage1_query"] = ""
+    st.session_state["cert_stage1_search_offset"] = 0
+    st.session_state["cert_stage1_search_pages"] = {}
 
 with st.container(
-    key="certs_nav",
     horizontal=True,
     horizontal_alignment="distribute",
-    vertical_alignment="center"
 ):
-    st.image(logo, width=170)
-
-    st.html(
-        """
-        <nav class="cc-navlinks">
-            <a href="#">Dashboard</a>
-            <a href="#">Jobs</a>
-            <a href="#">Freelance</a>
-            <a class="active" href="#">Certifications</a>
-            <a href="#">Profile</a>
-        </nav>
-        """
-    )
-
-    if st.button("← Dashboard", key="certs_nav_back", type="tertiary"):
+    st.image(ASSETS / "logo.png", width=170)
+    if st.button("Dashboard", type="tertiary"):
         st.switch_page("pages/dashboard.py")
 
+st.divider()
+st.title("Certifications")
+st.caption(
+    "Explore recommendations based on your education, experience, "
+    "and skills, or search the full catalog."
+)
 
-# =================================
-# HEADER
-# =================================
 
-with st.container(key="certs_hero"):
+def request_page(path, params, method="GET"):
+    try:
+        response = requests.request(
+            method,
+            f"{API_BASE}/api/career/{path}",
+            params=params,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=180,
+        )
+        response.raise_for_status()
+        data = response.json()
 
-    left, right = st.columns([2, 1], vertical_alignment="center")
+        if not isinstance(data, dict):
+            raise ValueError("Invalid response")
+
+        return data
+
+    except requests.Timeout:
+        st.error("The request timed out. Please retry.")
+
+    except (requests.RequestException, ValueError):
+        st.error(
+            "Could not load certifications. Please retry or sign in again."
+        )
+
+    return None
+
+
+def select_certification(item):
+    if (
+        not isinstance(item.get("exam_id"), str)
+        or not item["exam_id"].strip()
+    ):
+        st.error("This result has no valid Cert Atlas exam ID.")
+        return
+
+    st.session_state["selected_certification"] = dict(item)
+
+    # Both paths enter the same details page with the exact exam_id.
+    for key in (
+        "cert_plan_response",
+        "cert_plan_created",
+        "cert_exam_date",
+        "cert_current_level",
+    ):
+        st.session_state.pop(key, None)
+
+    st.switch_page("pages/certification_details.py")
+
+
+def render_result(item, position, manual=False):
+    exam_id = item.get("exam_id")
+
+    with st.container(border=True):
+        left, right = st.columns([5, 1.4])
+
+        with left:
+            st.html(
+                f'<div class="cert-name">'
+                f'{escape(str(item.get("name", "Certification")))}'
+                f'</div>'
+                f'<div class="cert-meta">'
+                f'{escape(str(item.get("provider") or "Not available"))}'
+                f' · '
+                f'{escape(str(item.get("exam_code") or "Exam code unavailable"))}'
+                f'</div>'
+            )
+
+            if manual:
+                status = item.get("lifecycle_status")
+                if status:
+                    st.caption(f"Catalog status: {status}")
+
+            else:
+                match = item.get("match") or {}
+                st.write(
+                    match.get("explanation") or "Explanation unavailable."
+                )
+                st.caption("Matching skills")
+
+                skills = match.get("matching_skills") or []
+                if skills:
+                    st.html("".join(
+                        f'<span class="cert-pill">'
+                        f'{escape(str(skill))}'
+                        f'</span>'
+                        for skill in skills
+                    ))
+                else:
+                    st.caption("No explicit matching skills listed.")
+
+                missing = match.get("missing_skills") or []
+                if missing:
+                    st.caption("Skills to review")
+                    for skill in missing:
+                        st.write(f"- {skill}")
+
+        with right:
+            if not manual:
+                st.caption(
+                    f"{str(item.get('priority', 'medium')).title()} priority"
+                )
+                st.caption("Based on list position")
+
+            if st.button(
+                "View certification",
+                key=(
+                    f"cert_select_"
+                    f"{'search' if manual else 'rec'}_"
+                    f"{position}_{exam_id}"
+                ),
+                type="primary",
+                disabled=not bool(exam_id),
+            ):
+                select_certification(item)
+
+
+def render_pagination(pagination, state_key, prefix):
+    offset = int(
+        pagination.get(
+            "offset",
+            st.session_state.get(state_key, 0),
+        )
+    )
+    total = int(pagination.get("total", 0))
+    returned = int(pagination.get("returned", 0))
+
+    left, center, right = st.columns([1, 3, 1])
 
     with left:
-        st.html('<p class="cc-dashboard-eyebrow">MAKE YOUR NEXT QUALIFICATION COUNT</p>')
-        st.html('<h1 class="cc-dashboard-title">Certification study planner.</h1>')
-        st.html(
-            '<p class="cc-dashboard-subtitle">'
-            "Create a study plan based on your certification, "
-            "current level, and exam date."
-            "</p>"
-        )
-
-    with right:
-        with st.container(horizontal_alignment="right"):
-            st.button(
-                "Sample profile & recommendations",
-                key="certs_sample_btn",
-                type="secondary"
-            )
-
-
-# =================================
-# STAGE 1: LOAD RECOMMENDATIONS
-# =================================
-
-if "cert_recommendations" not in st.session_state:
-    with st.spinner("Finding certifications matched to your profile..."):
-        try:
-            resp = requests.post(
-                f"{API_BASE}/api/career/certifications",
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=120,
-            )
-
-            if resp.status_code == 200:
-                data = resp.json()
-                st.session_state["cert_recommendations"] = data.get("recommendations", [])
-                st.session_state["cert_rec_analysis"] = data.get("analysis", "")
-            else:
-                st.session_state["cert_recommendations"] = []
-                st.session_state["cert_rec_analysis"] = ""
-
-        except requests.Timeout:
-            st.session_state["cert_recommendations"] = []
-            st.session_state["cert_rec_analysis"] = ""
-            st.warning("Recommendation load timed out. You can still enter a certification manually.")
-
-        except requests.RequestException as e:
-            st.session_state["cert_recommendations"] = []
-            st.session_state["cert_rec_analysis"] = ""
-            st.warning(f"Could not reach the API: {e}")
-
-
-recommendations = st.session_state.get("cert_recommendations", [])
-
-
-# =================================
-# STAGE 2 FORM — Study plan inputs
-# =================================
-
-with st.container(key="certs_form_card", border=True):
-
-    # Pre-fill cert name if user clicked a recommendation card
-    prefill_cert = st.session_state.get("selected_cert_name", "")
-
-    form_col1, form_col2, form_col3, form_col4 = st.columns(
-        [2.5, 1.5, 1.5, 1.5],
-        gap="medium",
-        vertical_alignment="bottom"
-    )
-
-    with form_col1:
-        cert_name = st.text_input(
-            "Certification name",
-            value=prefill_cert,
-            placeholder="e.g. Microsoft Power BI Data Analyst (PL-300)",
-            key="cert_name_input"
-        )
-
-    with form_col2:
-        current_level = st.selectbox(
-            "Current level",
-            options=["Beginner", "Intermediate", "Advanced"],
-            index=1,
-            key="cert_level_select"
-        )
-
-    with form_col3:
-        exam_date = st.date_input(
-            "Exam date",
-            value=None,
-            key="cert_date_input"
-        )
-
-    with form_col4:
-        create_plan = st.button(
-            "Create study plan →",
-            type="primary",
-            use_container_width=True,
-            key="cert_create_plan_btn"
-        )
-
-
-# =================================
-# STAGE 2: GENERATE STUDY PLAN
-# =================================
-
-if create_plan:
-    if not cert_name:
-        st.warning("Please enter a certification name.")
-    elif not exam_date:
-        st.warning("Please select an exam date.")
-    else:
-        st.session_state.pop("study_plan_result", None)
-
-        with st.spinner(f"Creating your personalised study plan for **{cert_name}**..."):
-            try:
-                resp = requests.post(
-                    f"{API_BASE}/api/career/certifications/study-plan",
-                    json={
-                        "selected_certification": cert_name,
-                        "current_level": current_level,
-                        "exam_date": str(exam_date),
-                    },
-                    headers={"Authorization": f"Bearer {token}"},
-                    timeout=120,
-                )
-
-                if resp.status_code == 200:
-                    data = resp.json()
-                    st.session_state["study_plan_result"] = data.get("study_plan", "")
-                    st.session_state["study_plan_cert"] = cert_name
-                else:
-                    st.error(
-                        f"Could not generate study plan "
-                        f"(status {resp.status_code}): {resp.text[:300]}"
-                    )
-
-            except requests.Timeout:
-                st.error(
-                    "The certification agent took too long. "
-                    "Please try again."
-                )
-
-            except requests.RequestException as e:
-                st.error(f"Could not reach the API: {e}")
-
-
-# =================================
-# STUDY PLAN OUTPUT
-# =================================
-
-study_plan = st.session_state.get("study_plan_result")
-
-if study_plan:
-    with st.container(key="certs_plan_card", border=True):
-        st.subheader(
-            f":material/menu_book: Study Plan — "
-            f"{st.session_state.get('study_plan_cert', cert_name)}"
-        )
-        st.divider()
-        st.markdown(study_plan)
-
-        refresh_plan = st.button(
-            ":material/refresh: Regenerate plan",
-            key="cert_regen_btn",
-            type="tertiary"
-        )
-        if refresh_plan:
-            st.session_state.pop("study_plan_result", None)
+        if st.button(
+            "Previous",
+            key=f"{prefix}_previous",
+            disabled=offset <= 0,
+        ):
+            st.session_state[state_key] = max(0, offset - PAGE_SIZE)
             st.rerun()
 
+    with center:
+        if returned:
+            st.caption(f"{offset + 1}–{offset + returned} of {total}")
+        else:
+            st.caption(f"0 shown · {total} results")
+
+    with right:
+        next_offset = pagination.get("next_offset")
+        if st.button(
+            "Next",
+            key=f"{prefix}_next",
+            disabled=(
+                not pagination.get("has_more")
+                or next_offset is None
+            ),
+        ):
+            st.session_state[state_key] = int(next_offset)
+            st.rerun()
+
+
+mode = st.radio(
+    "Explore certifications",
+    [
+        "Recommended Certifications",
+        "Search Any Certification",
+    ],
+    horizontal=True,
+)
+
+if mode == "Recommended Certifications":
+    if st.button("Refresh recommendations", type="secondary"):
+        st.session_state["cert_stage1_pages"] = {}
+        st.session_state["cert_stage1_offset"] = 0
+
+    offset = st.session_state["cert_stage1_offset"]
+    pages = st.session_state["cert_stage1_pages"]
+
+    if offset not in pages:
+        with st.spinner("Finding relevant certifications..."):
+            data = request_page(
+                "certifications",
+                {"offset": offset, "limit": PAGE_SIZE},
+                "POST",
+            )
+        if data is not None:
+            pages[offset] = data
+
+    data = pages.get(offset)
+
+    if data is not None:
+        if data.get("analysis"):
+            st.caption(data["analysis"])
+
+        items = data.get("recommendations") or []
+        if not items:
+            st.info(
+                "No recommendations to show. "
+                "Manual catalog search remains available."
+            )
+
+        for index, item in enumerate(items, offset):
+            render_result(item, index)
+
+        render_pagination(
+            data.get("pagination") or {},
+            "cert_stage1_offset",
+            "recommendations",
+        )
+
+    elif st.button("Retry recommendations"):
+        st.rerun()
+
 else:
-    # Placeholder when no plan generated yet
-    with st.container(key="certs_placeholder", border=True):
-        with st.container(horizontal_alignment="center"):
-            st.markdown(":material/menu_book:")
-            st.subheader(
-                "Your next goal, broken into clear steps.",
-                anchor=False
-            )
-            st.caption(
-                "Choose a certification and exam date to see your study "
-                "priorities and a week-by-week plan."
-            )
-
-
-# =================================
-# RECOMMENDATION CARDS
-# =================================
-
-if recommendations:
-    st.divider()
-
-    st.markdown("#### Recommended for your profile")
     st.caption(
-        "Based on your skills and experience — click any certification "
-        "to auto-fill the form above."
+        "Search by certification name, exam code, or provider. "
+        "Your profile does not filter these results."
     )
 
-    # Priority colour map
-    priority_colours = {
-        "High": "#1597E5",
-        "Medium": "#627D98",
-        "Low": "#9FB3C8",
-    }
+    with st.form("cert_catalog_search"):
+        query = st.text_input(
+            "Certification search",
+            max_chars=200,
+            placeholder=(
+                "PL-300, AWS Solutions Architect, Salesforce Administrator"
+            ),
+        )
+        submitted = st.form_submit_button(
+            "Search",
+            type="primary",
+        )
 
-    for i, rec in enumerate(recommendations):
-        exam_name = rec.get("name", "")
-        exam_code = rec.get("exam_code", "")
-        certifying_body = rec.get("provider", "")
-        
-        # Reason is now nested inside the match block
-        match_details = rec.get("match", {})
-        reason = match_details.get("explanation", "")
-        
-        priority = str(rec.get("priority", "medium")).title()
-        colour = priority_colours.get(priority, "#627D98")
+    if submitted:
+        st.session_state["cert_stage1_query"] = query.strip()
+        st.session_state["cert_stage1_search_offset"] = 0
+        st.session_state["cert_stage1_search_pages"] = {}
 
-        display_label = exam_name
-        if exam_code:
-            display_label += f" ({exam_code})"
+        if not query.strip():
+            st.warning(
+                "Enter a certification name, exam code, or provider."
+            )
 
-        with st.container(key=f"cert_rec_{i}_{exam_name[:10]}", border=True):
+    active_query = st.session_state["cert_stage1_query"]
 
-            left_rec, right_rec = st.columns([4, 1], vertical_alignment="center")
+    if active_query:
+        offset = st.session_state["cert_stage1_search_offset"]
+        pages = st.session_state["cert_stage1_search_pages"]
+        key = (active_query, offset)
 
-            with left_rec:
-                st.html(
-                    f"""
-                    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-                        <div>
-                            <div class="cc-profile-value" style="font-size:16px; margin:0;">
-                                {display_label}
-                            </div>
-                            <div class="cc-profile-detail" style="margin:2px 0 6px;">
-                                {certifying_body}
-                            </div>
-                            <div style="font-size:13px; color:#627D98;">
-                                {reason}
-                            </div>
-                        </div>
-                    </div>
-                    """
+        if key not in pages:
+            with st.spinner("Searching Cert Atlas..."):
+                data = request_page(
+                    "certifications/search",
+                    {
+                        "query": active_query,
+                        "offset": offset,
+                        "limit": PAGE_SIZE,
+                    },
                 )
 
-            with right_rec:
-                # Priority badge + select button
-                st.html(
-                    f'<span class="cc-priority-badge" '
-                    f'style="background:{colour}20; color:{colour}; '
-                    f'border:1px solid {colour}40;">'
-                    f'{priority} Priority</span>'
-                )
+            if data is not None:
+                pages[key] = data
 
-                if st.button(
-                    "Select",
-                    key=f"cert_select_{i}_{exam_name[:10]}",
-                    type="secondary",
-                    use_container_width=True
-                ):
-                    st.session_state["selected_cert_name"] = exam_name
-                    st.rerun()
+        data = pages.get(key)
 
-    # Refresh recs
-    if st.button(
-        ":material/refresh: Refresh recommendations",
-        key="certs_refresh",
-        type="tertiary"
-    ):
-        for k in ["cert_recommendations", "cert_rec_analysis"]:
-            st.session_state.pop(k, None)
-        st.rerun()
+        if data is not None:
+            items = data.get("certifications") or []
+
+            if not items:
+                st.info("No certifications found for this search.")
+
+            for index, item in enumerate(items, offset):
+                render_result(item, index, manual=True)
+
+            render_pagination(
+                data.get("pagination") or {},
+                "cert_stage1_search_offset",
+                "catalog",
+            )
+
+        elif st.button("Retry search"):
+            st.rerun()

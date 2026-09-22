@@ -29,11 +29,12 @@ class JobOpportunity(BaseModel):
 
 
 class CertificationRecommendation(BaseModel):
+    exam_id: str
     name: str
     provider: str
     exam_code: str | None = None
     url: str | None = None
-    priority: Literal["high", "medium", "low"]# i think we do not have this in our agent
+    priority: Literal["high", "medium", "low"]
     match: MatchDetails
 
 
