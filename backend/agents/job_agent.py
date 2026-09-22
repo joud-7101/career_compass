@@ -6,7 +6,7 @@ from backend.config import settings
 from backend.tools.job_search import search_jobs
 from backend.tools.onet import get_occupation_information
 from backend.tools.resume import get_required_skills
-
+from backend.guardrails.job_guardrails import validate_job_analysis 
 
 llm = ChatOpenAI(
     model="gpt-5.4-mini",
@@ -126,7 +126,11 @@ Return:
     else:
         final_response = response
 
+    validated_output = validate_job_analysis(
+        final_response.content
+    )
+
     return {
-        "job_analysis": final_response.content,
+        "job_analysis": validated_output,
         "jobs": jobs,
-    }
+    } 
