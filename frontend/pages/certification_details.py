@@ -1,12 +1,14 @@
-from pathlib import Path
+from datetime import date
 from html import escape
+from pathlib import Path
+import re
 
 import requests
 import streamlit as st
 
 
 # =========================================================
-# PAGE SETTINGS
+# PAGE SETTINGS / API
 # =========================================================
 
 st.set_page_config(
@@ -15,38 +17,26 @@ st.set_page_config(
     layout="wide",
 )
 
-
-# =========================================================
-# FILES / API
-# =========================================================
-
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
+API_BASE = "http://127.0.0.1:8000"
+LEVELS = ("Beginner", "Intermediate", "Advanced")
 
 st.html(ASSETS / "home.css")
 
-logo = ASSETS / "logo.png"
-
-API_BASE = "http://127.0.0.1:8000"
-
 
 # =========================================================
-# PAGE CSS
+# PAGE STYLE
 # =========================================================
 
 st.html(
     """
     <style>
-
-    /* -----------------------------
-       PAGE
-    ----------------------------- */
-
     .cc-cert-title {
         color: #0B2E4F;
         font-size: 38px;
         font-weight: 700;
         line-height: 1.15;
-        margin: 0 0 8px 0;
+        margin: 0 0 8px;
     }
 
     .cc-cert-meta {
@@ -60,12 +50,8 @@ st.html(
         font-size: 16px;
         line-height: 1.6;
         max-width: 720px;
+        white-space: pre-wrap;
     }
-
-
-    /* -----------------------------
-       SECTION HEADER
-    ----------------------------- */
 
     .cc-section-header {
         display: flex;
@@ -81,11 +67,9 @@ st.html(
         border-radius: 50%;
         background: #E8F5FD;
         color: #1597E5;
-
         display: flex;
         align-items: center;
         justify-content: center;
-
         font-size: 18px;
         font-weight: 700;
     }
@@ -102,246 +86,230 @@ st.html(
         font-size: 13px;
         margin-top: 3px;
     }
-
-
-    /* -----------------------------
-       EXAM INFO
-    ----------------------------- */
-
-    .cc-info-row {
-        display: grid;
-        grid-template-columns: 155px 1fr;
-        gap: 14px;
-        margin-bottom: 15px;
-    }
-
-    .cc-info-label {
-        color: #627D98;
-        font-size: 13px;
-    }
-
-    .cc-info-value {
-        color: #102A43;
-        font-size: 13px;
-        font-weight: 500;
-    }
-
-
-    /* -----------------------------
-       DOMAINS
-    ----------------------------- */
-
-    .cc-domain-title {
-        color: #102A43;
-        font-size: 16px;
-        font-weight: 700;
-        margin-bottom: 3px;
-    }
-
-    .cc-domain-subtitle {
-        color: #829AB1;
-        font-size: 12px;
-        margin-bottom: 14px;
-    }
-
-    .cc-domain-row {
-        display: grid;
-        grid-template-columns: 34px 1fr auto;
-        align-items: center;
-        gap: 10px;
-
-        padding: 10px 0;
-        border-bottom: 1px solid #E6EEF5;
-    }
-
-    .cc-domain-number {
-        width: 27px;
-        height: 27px;
-        border-radius: 50%;
-
-        background: #E8F5FD;
-        color: #1597E5;
-
-        display: flex;
-        align-items: center;
-        justify-content: center;
-
-        font-size: 12px;
-        font-weight: 700;
-    }
-
-    .cc-domain-name {
-        color: #102A43;
-        font-size: 13px;
-    }
-
-    .cc-domain-weight {
-        color: #102A43;
-        font-size: 13px;
-        font-weight: 500;
-    }
-
-
-    /* -----------------------------
-       STUDY PLAN SUB-CARDS
-    ----------------------------- */
-
-    .cc-plan-heading {
-        color: #102A43;
-        font-size: 15px;
-        font-weight: 700;
-        margin-bottom: 4px;
-    }
-
-    .cc-plan-caption {
-        color: #829AB1;
-        font-size: 11px;
-        margin-bottom: 12px;
-    }
-
-    .cc-plan-box {
-        background: #F7F9FC;
-        border-radius: 9px;
-        padding: 15px;
-        min-height: 165px;
-    }
-
-    .cc-placeholder-text {
-        color: #829AB1;
-        font-size: 13px;
-        line-height: 1.7;
-    }
-
-
-    /* -----------------------------
-       RESOURCE ROW
-    ----------------------------- */
-
-    .cc-resource-row {
-        border: 1px solid #D9E2EC;
-        border-radius: 9px;
-        padding: 11px 14px;
-        margin-bottom: 7px;
-
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .cc-resource-name {
-        color: #102A43;
-        font-size: 13px;
-        font-weight: 600;
-    }
-
-    .cc-resource-provider {
-        color: #829AB1;
-        font-size: 11px;
-        margin-top: 2px;
-    }
-
-    .cc-resource-open {
-        color: #1597E5;
-        font-size: 12px;
-        font-weight: 600;
-    }
-
-
-    /* -----------------------------
-       NOTES
-    ----------------------------- */
-
-    .cc-notes-box {
-        background: #EAF6FD;
-        border-radius: 9px;
-        padding: 15px;
-        color: #627D98;
-        font-size: 12px;
-        line-height: 1.6;
-    }
-
     </style>
     """
 )
 
 
 # =========================================================
-# AUTH
+# HELPERS
+# =========================================================
+
+def clear_plan():
+    for key in (
+        "cert_plan_response",
+        "cert_plan_created",
+        "cert_plan_request",
+    ):
+        st.session_state.pop(key, None)
+
+
+def valid_exam_id(value):
+    """Validate the ID's shape without changing the selected identifier."""
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and value == value.strip()
+        and not any(
+            character.isspace() or ord(character) < 32
+            for character in value
+        )
+    )
+
+
+def text_value(value):
+    return value.strip() if isinstance(value, str) else ""
+
+
+def section_header(number, title, subtitle):
+    st.html(
+        f"""
+        <div class="cc-section-header">
+            <div class="cc-section-number">{escape(number)}</div>
+            <div>
+                <div class="cc-section-title">{escape(title)}</div>
+                <div class="cc-section-subtitle">{escape(subtitle)}</div>
+            </div>
+        </div>
+        """
+    )
+
+
+def authentication_error():
+    st.error("Your session has expired. Please sign in again.")
+    if st.button(
+        "Sign in",
+        type="primary",
+        key="cert_details_sign_in_again",
+    ):
+        st.switch_page("pages/sign_in.py")
+    st.stop()
+
+
+def api_error_message(response):
+    message = f"Could not generate the study plan ({response.status_code})."
+
+    try:
+        data = response.json()
+    except ValueError:
+        return message
+
+    if not isinstance(data, dict):
+        return message
+
+    detail = data.get("detail")
+
+    if isinstance(detail, str) and detail.strip():
+        return f"{message} {detail.strip()}"
+
+    if isinstance(detail, list):
+        errors = []
+
+        for item in detail:
+            if not isinstance(item, dict):
+                continue
+
+            error_text = text_value(item.get("msg"))
+            if not error_text:
+                continue
+
+            location = item.get("loc")
+            field = ""
+
+            if isinstance(location, (list, tuple)):
+                field = ".".join(
+                    str(part)
+                    for part in location
+                    if part not in ("body", "query", "path")
+                )
+
+            errors.append(
+                f"{field}: {error_text}" if field else error_text
+            )
+
+        if errors:
+            return message + "\n\n" + "\n\n".join(errors)
+
+    return message
+
+
+def parse_study_plan(markdown):
+    """Split only the expected headings; otherwise preserve the full response."""
+    expected = [
+        (2, "exam information", "information"),
+        (3, "domains and weights", "domains"),
+        (2, "personalized study plan", "introduction"),
+        (3, "study priorities", "priorities"),
+        (3, "weekly plan", "weekly"),
+        (3, "exam preparation", "preparation"),
+    ]
+
+    sections = {key: [] for _, _, key in expected}
+    position = 0
+    current = None
+    fence = None
+
+    for line in markdown.splitlines():
+        fence_match = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
+
+        if fence is not None:
+            if current is None:
+                return None
+
+            sections[current].append(line)
+
+            if (
+                fence_match
+                and fence_match.group(1)[0] == fence[0]
+                and len(fence_match.group(1)) >= len(fence)
+                and not fence_match.group(2).strip()
+            ):
+                fence = None
+
+            continue
+
+        if fence_match:
+            if current is None:
+                return None
+
+            fence = fence_match.group(1)
+            sections[current].append(line)
+            continue
+
+        heading = re.match(r"^ {0,3}(#{2,3})[ \t]+(.+?)\s*$", line)
+
+        if heading:
+            title = re.sub(
+                r"[ \t]+#+[ \t]*$",
+                "",
+                heading.group(2),
+            )
+
+            if position >= len(expected):
+                return None
+
+            level, label, key = expected[position]
+
+            if (
+                len(heading.group(1)) != level
+                or title.casefold() != label
+            ):
+                return None
+
+            current = key
+            position += 1
+            continue
+
+        if current is None:
+            if line.strip():
+                return None
+        else:
+            sections[current].append(line)
+
+    if fence is not None or position != len(expected):
+        return None
+
+    result = {
+        key: "\n".join(lines).strip()
+        for key, lines in sections.items()
+    }
+
+    if any(
+        not result[key]
+        for key in (
+            "information",
+            "domains",
+            "priorities",
+            "weekly",
+            "preparation",
+        )
+    ):
+        return None
+
+    return result
+
+
+# =========================================================
+# AUTHENTICATION
 # =========================================================
 
 token = st.session_state.get("token")
 
 if not token:
+    clear_plan()
+    st.session_state.pop("cert_plan_owner", None)
+    st.session_state.pop("cert_plan_auth_error", None)
 
-    st.warning(
-        "Please sign in to view certification details."
-    )
+    st.warning("Please sign in to view certification details.")
 
-    if st.button(
-        "Sign in",
-        type="primary",
-    ):
-        st.switch_page(
-            "pages/sign_in.py"
-        )
+    if st.button("Sign in", type="primary"):
+        st.switch_page("pages/sign_in.py")
 
     st.stop()
 
 
 # =========================================================
-# SELECTED CERTIFICATION
-# =========================================================
-
-selected = st.session_state.get(
-    "selected_certification"
-)
-
-if not selected:
-
-    st.warning(
-        "No certification was selected."
-    )
-
-    if st.button(
-        "← Back to Certifications",
-        type="secondary",
-    ):
-        st.switch_page(
-            "pages/certifications.py"
-        )
-
-    st.stop()
-
-
-exam_id = selected.get("exam_id")
-
-exam_name = selected.get(
-    "name",
-    "Certification"
-)
-
-exam_code = selected.get(
-    "exam_code"
-)
-
-provider = selected.get(
-    "provider",
-    ""
-)
-
-match = selected.get(
-    "match",
-    {}
-) or {}
-
-description = match.get(
-    "explanation",
-    ""
-)
-
-
-# =========================================================
-# NAVBAR
+# NAVIGATION
 # =========================================================
 
 with st.container(
@@ -349,11 +317,7 @@ with st.container(
     horizontal_alignment="distribute",
     vertical_alignment="center",
 ):
-
-    st.image(
-        logo,
-        width=170,
-    )
+    st.image(ASSETS / "logo.png", width=170)
 
     st.html(
         """
@@ -369,26 +333,89 @@ with st.container(
 
     st.write("")
 
-
 st.divider()
-
-
-# =========================================================
-# BACK BUTTON
-# =========================================================
 
 if st.button(
     "← Back to Certifications",
     type="tertiary",
     key="back_to_certifications",
 ):
-    st.switch_page(
-        "pages/certifications.py"
-    )
+    st.switch_page("pages/certifications.py")
 
 
 # =========================================================
-# HERO + FORM
+# SELECTED CERTIFICATION / SESSION OWNERSHIP
+# =========================================================
+
+selected = st.session_state.get("selected_certification")
+
+if not isinstance(selected, dict) or not selected:
+    clear_plan()
+    st.session_state.pop("cert_plan_owner", None)
+    st.warning("No certification was selected. Go back to Certifications.")
+    st.stop()
+
+exam_id = selected.get("exam_id")
+
+if not valid_exam_id(exam_id):
+    clear_plan()
+    st.session_state.pop("cert_plan_owner", None)
+    st.error(
+        "This selection has no valid Cert Atlas exam ID. "
+        "Go back to Certifications and select the certification again."
+    )
+    st.stop()
+
+# Never reuse a response belonging to another exam or signed-in session.
+owner = (token, exam_id)
+
+if st.session_state.get("cert_plan_owner") != owner:
+    clear_plan()
+
+    for key in (
+        "cert_current_level",
+        "cert_exam_date",
+        "cert_plan_auth_error",
+    ):
+        st.session_state.pop(key, None)
+
+    st.session_state["cert_plan_owner"] = owner
+
+if st.session_state.get("cert_plan_auth_error"):
+    authentication_error()
+
+exam_name = (
+    text_value(selected.get("name"))
+    or text_value(selected.get("exam_name"))
+    or text_value(selected.get("certification_name"))
+    or "Certification"
+)
+
+exam_code = text_value(selected.get("exam_code"))
+
+provider = (
+    text_value(selected.get("provider"))
+    or text_value(selected.get("certifying_body"))
+)
+
+match = selected.get("match")
+description = (
+    text_value(match.get("explanation"))
+    if isinstance(match, dict)
+    else ""
+)
+
+# Validate restored widget state before creating the widgets.
+if st.session_state.get("cert_current_level", LEVELS[0]) not in LEVELS:
+    st.session_state.pop("cert_current_level", None)
+
+saved_date = st.session_state.get("cert_exam_date")
+if saved_date is not None and type(saved_date) is not date:
+    st.session_state.pop("cert_exam_date", None)
+
+
+# =========================================================
+# CERTIFICATION HEADER + PLAN FORM
 # =========================================================
 
 hero_left, hero_right = st.columns(
@@ -397,96 +424,61 @@ hero_left, hero_right = st.columns(
     vertical_alignment="center",
 )
 
-
-# LEFT — certification
 with hero_left:
-
-    safe_name = escape(
-        str(exam_name)
-    )
-
-    safe_code = escape(
-        str(
-            exam_code
-            or "Exam code unavailable"
-        )
-    )
-
-    safe_provider = escape(
-        str(provider)
-    )
-
-    safe_description = escape(
-        str(description)
-    )
-
     st.html(
-        f"""
-        <h1 class="cc-cert-title">
-            {safe_name}
-        </h1>
-
-        <div class="cc-cert-meta">
-            {safe_code}
-            &nbsp; • &nbsp;
-            {safe_provider}
-        </div>
-
-        <div class="cc-cert-description">
-            {safe_description}
-        </div>
-        """
+        f'<h1 class="cc-cert-title">{escape(exam_name)}</h1>'
     )
 
+    metadata = [
+        escape(value)
+        for value in (exam_code, provider)
+        if value
+    ]
 
-# RIGHT — plan setup
-with hero_right:
-
-    with st.container(
-        border=True,
-        key="study_plan_setup",
-    ):
-
-        st.markdown(
-            "### Prepare your study plan"
+    if metadata:
+        st.html(
+            '<div class="cc-cert-meta">'
+            + " &nbsp; • &nbsp; ".join(metadata)
+            + "</div>"
         )
 
+    if description:
+        st.html(
+            '<div class="cc-cert-description">'
+            + escape(description)
+            + "</div>"
+        )
+
+with hero_right:
+    with st.container(border=True, key="study_plan_setup"):
+        st.markdown("### Prepare your study plan")
         st.caption(
             "Set your current level and target exam date "
             "to generate a personalized plan."
         )
 
-        level_col, date_col = st.columns(
-            2,
-            gap="medium",
-        )
+        with st.form("cert_study_plan_form"):
+            level_col, date_col = st.columns(2, gap="medium")
 
-        with level_col:
+            with level_col:
+                current_level = st.selectbox(
+                    "Current level",
+                    LEVELS,
+                    key="cert_current_level",
+                )
 
-            current_level = st.selectbox(
-                "Current level",
-                [
-                    "Beginner",
-                    "Intermediate",
-                    "Advanced",
-                ],
-                key="cert_current_level",
+            with date_col:
+                exam_date = st.date_input(
+                    "Exam date",
+                    value=None,
+                    key="cert_exam_date",
+                )
+
+            create_plan = st.form_submit_button(
+                "Create Study Plan",
+                type="primary",
+                use_container_width=True,
             )
-
-        with date_col:
-
-            exam_date = st.date_input(
-                "Exam date",
-                value=None,
-                key="cert_exam_date",
-            )
-
-        create_plan = st.button(
-            "Create study plan →",
-            type="primary",
-            use_container_width=True,
-            key="create_cert_plan",
-        )
 
 
 # =========================================================
@@ -494,486 +486,218 @@ with hero_right:
 # =========================================================
 
 if create_plan:
+    clear_plan()
 
-    if not exam_date:
+    if current_level not in LEVELS:
+        st.error("Choose Beginner, Intermediate, or Advanced.")
 
-        st.warning(
-            "Please select an exam date."
-        )
+    elif type(exam_date) is not date:
+        st.warning("Please select an exam date.")
+
+    elif exam_date < date.today():
+        st.error("Exam date cannot be in the past.")
 
     else:
+        payload = {
+            "selected_certification": exam_id,
+            "current_level": current_level,
+            "exam_date": exam_date.isoformat(),
+        }
 
-        selected_identifier = (
-            exam_id
-            or exam_name
-        )
-
-        with st.spinner(
-            "Creating your personalized study plan..."
-        ):
-
+        with st.spinner("Creating your personalized study plan..."):
             try:
-
                 response = requests.post(
-                    f"{API_BASE}/api/career/"
-                    "certifications/study-plan",
-                    json={
-                        "selected_certification":
-                            selected_identifier,
-                        "current_level":
-                            current_level,
-                        "exam_date":
-                            str(exam_date),
-                    },
-                    headers={
-                        "Authorization":
-                            f"Bearer {token}"
-                    },
-                    timeout=180,
+                    f"{API_BASE}/api/career/certifications/study-plan",
+                    json=payload,
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=(10, 180),
                 )
 
-                if response.status_code == 200:
+            except requests.Timeout:
+                st.error(
+                    "The request timed out. Please try creating "
+                    "your study plan again."
+                )
 
-                    st.session_state[
-                        "cert_plan_response"
-                    ] = response.json()
+            except requests.ConnectionError:
+                st.error(
+                    "Could not connect to the API. "
+                    "Please check that the backend is running and try again."
+                )
 
-                    st.session_state[
-                        "cert_plan_created"
-                    ] = True
+            except requests.RequestException:
+                st.error(
+                    "The study plan request failed. Please try again."
+                )
+
+            else:
+                if response.status_code == 401:
+                    st.session_state["cert_plan_auth_error"] = True
+                    st.rerun()
+
+                elif response.status_code != 200:
+                    st.error(api_error_message(response))
 
                 else:
+                    try:
+                        data = response.json()
+                    except ValueError:
+                        st.error(
+                            "The backend returned invalid JSON. "
+                            "Please try again."
+                        )
+                    else:
+                        study_plan = (
+                            data.get("study_plan")
+                            if isinstance(data, dict)
+                            else None
+                        )
 
-                    st.error(
-                        f"Could not generate plan "
-                        f"({response.status_code})."
-                    )
+                        if (
+                            not isinstance(study_plan, str)
+                            or not study_plan.strip()
+                        ):
+                            st.error(
+                                "The backend response did not contain "
+                                "a non-empty study_plan. Please try again."
+                            )
 
-            except requests.RequestException as error:
-
-                st.error(
-                    f"Could not reach API: {error}"
-                )
+                        else:
+                            # Store the actual response without rewriting it.
+                            st.session_state["cert_plan_response"] = data
+                            st.session_state["cert_plan_request"] = (
+                                payload.copy()
+                            )
+                            st.session_state["cert_plan_created"] = (
+                                parse_study_plan(study_plan) is not None
+                            )
 
 
 # =========================================================
-# RESULT PLACEHOLDERS
+# DISPLAY THE ACTUAL BACKEND RESULT
 # =========================================================
-
-plan_created = st.session_state.get(
-    "cert_plan_created",
-    False
-)
-
 
 st.write("")
-st.write("")
 
+plan_response = st.session_state.get("cert_plan_response")
+plan_request = st.session_state.get("cert_plan_request")
 
-# =========================================================
-# TWO COLUMN RESULTS
-# =========================================================
+if plan_response is None:
+    st.info(
+        "Choose your current level and exam date to load exam "
+        "information and create your study plan."
+    )
+    st.stop()
 
-main_col, side_col = st.columns(
-    [2.05, 1],
-    gap="large",
+# A cached response is usable only with its recorded exact exam ID.
+if (
+    st.session_state.get("cert_plan_owner") != owner
+    or not isinstance(plan_request, dict)
+    or plan_request.get("selected_certification") != exam_id
+):
+    clear_plan()
+    st.info(
+        "Choose your current level and exam date to load exam "
+        "information and create your study plan."
+    )
+    st.stop()
+
+study_plan = (
+    plan_response.get("study_plan")
+    if isinstance(plan_response, dict)
+    else None
 )
 
+if not isinstance(study_plan, str) or not study_plan.strip():
+    clear_plan()
+    st.error(
+        "The saved backend response is invalid. "
+        "Please create your study plan again."
+    )
+    st.stop()
 
-# =========================================================
-# LEFT COLUMN
-# =========================================================
+sections = parse_study_plan(study_plan)
 
-with main_col:
+if sections is None:
+    st.session_state["cert_plan_created"] = False
 
-    # -----------------------------------------------------
-    # 01 EXAM INFORMATION
-    # -----------------------------------------------------
+    # Stage 2 can return a validation/error message with HTTP 200.
+    # Unexpected Markdown is also shown intact rather than losing content.
+    st.warning(
+        "The backend did not return the expected complete study-plan "
+        "sections. Its response is shown below."
+    )
 
-    with st.container(
-        border=True,
-        key="exam_information_card",
-    ):
+    with st.container(border=True):
+        st.markdown(study_plan, unsafe_allow_html=False)
 
-        st.html(
-            """
-            <div class="cc-section-header">
+    st.stop()
 
-                <div class="cc-section-number">
-                    01
-                </div>
+st.session_state["cert_plan_created"] = True
 
-                <div>
-                    <div class="cc-section-title">
-                        Exam Information
-                    </div>
+st.caption(
+    f"Plan generated for {plan_request.get('current_level')} level "
+    f"and exam date {plan_request.get('exam_date')}. "
+    "Submit the form again to apply changes."
+)
 
-                    <div class="cc-section-subtitle">
-                        Key details about this certification and exam.
-                    </div>
-                </div>
+with st.container(border=True, key="exam_information_card"):
+    section_header(
+        "01",
+        "Exam Information",
+        "Exam details returned for the selected certification.",
+    )
 
-            </div>
-            """
+    info_col, domain_col = st.columns(
+        [1, 1.15],
+        gap="large",
+    )
+
+    with info_col:
+        st.markdown(
+            sections["information"],
+            unsafe_allow_html=False,
         )
 
-        info_col, domain_col = st.columns(
-            [1, 1.15],
-            gap="large",
+    with domain_col:
+        st.markdown("### Domains and weights")
+        st.markdown(
+            sections["domains"],
+            unsafe_allow_html=False,
         )
 
-        # ---------------------------------------------
-        # Exam information
-        # ---------------------------------------------
+st.write("")
 
-        with info_col:
+with st.container(border=True, key="personalized_plan_card"):
+    section_header(
+        "02",
+        "Personalized Study Plan",
+        "Your preparation plan based on the submitted level and exam date.",
+    )
 
-            exam_rows = [
-                (
-                    "Certification Name",
-                    exam_name,
-                ),
-                (
-                    "Exam Code",
-                    exam_code or "—",
-                ),
-                (
-                    "Certifying Body",
-                    provider or "—",
-                ),
-                (
-                    "Number of Questions",
-                    "—",
-                ),
-                (
-                    "Exam Duration",
-                    "—",
-                ),
-                (
-                    "Exam Format",
-                    "—",
-                ),
-                (
-                    "Official Practice Exam",
-                    "—",
-                ),
-            ]
-
-            for label, value in exam_rows:
-
-                st.html(
-                    f"""
-                    <div class="cc-info-row">
-
-                        <div class="cc-info-label">
-                            {escape(str(label))}
-                        </div>
-
-                        <div class="cc-info-value">
-                            {escape(str(value))}
-                        </div>
-
-                    </div>
-                    """
-                )
-
-        # ---------------------------------------------
-        # Domains
-        # ---------------------------------------------
-
-        with domain_col:
-
-            st.html(
-                """
-                <div class="cc-domain-title">
-                    Exam Domains
-                </div>
-
-                <div class="cc-domain-subtitle">
-                    The exam covers the following
-                    domains and weightings.
-                </div>
-                """
-            )
-
-            # Backend structured data comes later.
-            # For now keep the correct UI shape.
-
-            for i in range(1, 5):
-
-                st.html(
-                    f"""
-                    <div class="cc-domain-row">
-
-                        <div class="cc-domain-number">
-                            {i}
-                        </div>
-
-                        <div class="cc-domain-name">
-                            Domain information
-                        </div>
-
-                        <div class="cc-domain-weight">
-                            —
-                        </div>
-
-                    </div>
-                    """
-                )
-
-
-    st.write("")
-
-
-    # -----------------------------------------------------
-    # 02 PERSONALIZED STUDY PLAN
-    # -----------------------------------------------------
-
-    with st.container(
-        border=True,
-        key="personalized_plan_card",
-    ):
-
-        st.html(
-            """
-            <div class="cc-section-header">
-
-                <div class="cc-section-number">
-                    02
-                </div>
-
-                <div>
-                    <div class="cc-section-title">
-                        Personalized Study Plan
-                    </div>
-
-                    <div class="cc-section-subtitle">
-                        A tailored plan based on your
-                        level and exam date.
-                    </div>
-                </div>
-
-            </div>
-            """
+    if sections["introduction"]:
+        st.markdown(
+            sections["introduction"],
+            unsafe_allow_html=False,
         )
 
-        priority_col, week_col, prep_col = st.columns(
-            3,
-            gap="medium",
+    with st.container(border=True):
+        st.markdown("### 🎯 Study Priorities")
+        st.markdown(
+            sections["priorities"],
+            unsafe_allow_html=False,
         )
 
-
-        # ---------------------------------------------
-        # Study priorities
-        # ---------------------------------------------
-
-        with priority_col:
-
-            with st.container(
-                border=True,
-            ):
-
-                st.markdown(
-                    "#### 🎯 Study Priorities"
-                )
-
-                st.caption(
-                    "Focus on the most important areas."
-                )
-
-                st.html(
-                    """
-                    <div class="cc-plan-box">
-
-                        <div class="cc-placeholder-text">
-                            Your personalized study
-                            priorities will appear here
-                            after the study plan is generated.
-                        </div>
-
-                    </div>
-                    """
-                )
-
-
-        # ---------------------------------------------
-        # Weekly plan
-        # ---------------------------------------------
-
-        with week_col:
-
-            with st.container(
-                border=True,
-            ):
-
-                st.markdown(
-                    "#### 📅 Weekly Plan"
-                )
-
-                st.caption(
-                    "Your week-by-week preparation."
-                )
-
-                st.html(
-                    """
-                    <div class="cc-plan-box">
-
-                        <div class="cc-placeholder-text">
-                            Week 1<br><br>
-                            Week 2<br><br>
-                            Week 3<br><br>
-                            Final review
-                        </div>
-
-                    </div>
-                    """
-                )
-
-
-        # ---------------------------------------------
-        # Exam preparation
-        # ---------------------------------------------
-
-        with prep_col:
-
-            with st.container(
-                border=True,
-            ):
-
-                st.markdown(
-                    "#### 🎓 Exam Preparation"
-                )
-
-                st.caption(
-                    "Activities to build exam readiness."
-                )
-
-                st.html(
-                    """
-                    <div class="cc-plan-box">
-
-                        <div class="cc-placeholder-text">
-                            Your practice strategy,
-                            final revision and exam
-                            preparation will appear here.
-                        </div>
-
-                    </div>
-                    """
-                )
-
-
-# =========================================================
-# RIGHT COLUMN
-# =========================================================
-
-with side_col:
-
-    # -----------------------------------------------------
-    # 03 RESOURCES
-    # -----------------------------------------------------
-
-    with st.container(
-        border=True,
-        key="resources_card",
-    ):
-
-        st.html(
-            """
-            <div class="cc-section-header">
-
-                <div class="cc-section-number">
-                    03
-                </div>
-
-                <div>
-                    <div class="cc-section-title">
-                        Practice & Official Resources
-                    </div>
-
-                    <div class="cc-section-subtitle">
-                        Official resources for your exam.
-                    </div>
-                </div>
-
-            </div>
-            """
+    with st.container(border=True):
+        st.markdown("### 📅 Weekly Plan")
+        st.markdown(
+            sections["weekly"],
+            unsafe_allow_html=False,
         )
 
-        resources = [
-            "Official exam page",
-            "Official practice assessment",
-            "Official study guide",
-            "Official learning resources",
-        ]
-
-        for resource in resources:
-
-            st.html(
-                f"""
-                <div class="cc-resource-row">
-
-                    <div>
-                        <div class="cc-resource-name">
-                            {resource}
-                        </div>
-
-                        <div class="cc-resource-provider">
-                            Available after plan generation
-                        </div>
-                    </div>
-
-                    <div class="cc-resource-open">
-                        Open →
-                    </div>
-
-                </div>
-                """
-            )
-
-
-    st.write("")
-
-
-    # -----------------------------------------------------
-    # IMPORTANT NOTES
-    # -----------------------------------------------------
-
-    with st.container(
-        border=True,
-        key="important_notes_card",
-    ):
-
-        st.html(
-            """
-            <div class="cc-section-header">
-
-                <div class="cc-section-number">
-                    i
-                </div>
-
-                <div>
-                    <div class="cc-section-title">
-                        Important Notes
-                    </div>
-
-                    <div class="cc-section-subtitle">
-                        Keep these in mind as you prepare.
-                    </div>
-                </div>
-
-            </div>
-            """
-        )
-
-        st.html(
-            """
-            <div class="cc-notes-box">
-
-                Important exam notes, retake policy,
-                missing information and source updates
-                will appear here after the plan is generated.
-
-            </div>
-            """
+    with st.container(border=True):
+        st.markdown("### 🎓 Exam Preparation")
+        st.markdown(
+            sections["preparation"],
+            unsafe_allow_html=False,
         )

@@ -72,6 +72,13 @@ class CareerState(TypedDict, total=False):
         "Advanced"
     ]
     exam_date: str
+
+    # -------------------------
+    # Certification pagination
+    # -------------------------
+
+    offset: int
+    limit: int
     
     # -------------------------
     # Structured Agent outputs

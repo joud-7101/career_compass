@@ -4,15 +4,19 @@ Each endpoint calls the relevant agent directly using the user's stored profile.
 """
 
 import json
+import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from pydantic import BaseModel
 from sqlmodel import Session
 
 from backend.database.database import get_session
 from backend.database.crud import get_user, get_profile_review
 from backend.security import decode_access_token
+from backend.tools.certification_search import search_certifications
+
+logger = logging.getLogger(__name__)
 
 from backend.agents.job_agent import job_agent
 from backend.agents.freelance_agent import freelance_agent
@@ -52,6 +56,7 @@ def get_current_user_id(
 # --------------------------------------------------
 
 from backend.schemas.profile import UserProfile
+
 
 def load_agent_profile(
     user_id: int,
@@ -105,6 +110,7 @@ def get_job_recommendations(
         "jobs": result.get("jobs", []),
         "analysis": result.get("job_analysis", ""),
     }
+
 
 # ==================================================
 # FREELANCE endpoint
@@ -166,8 +172,8 @@ class ProposalRequest(BaseModel):
     project_title: str
     project_description: str
     budget_or_rate: str | None = None
-    matching_skills: list[str] = []  # skills user has that match the project
-    missing_skills: list[str] = []   # skills the project needs but user lacks
+    matching_skills: list[str] = []
+    missing_skills: list[str] = []
 
 
 @router.post("/freelance/proposal")
@@ -191,18 +197,16 @@ def get_proposal(
     # used by all other agents. It contains skills, experience, projects.
     profile = load_agent_profile(user_id, session)
 
-    # Call the proposal agent to generate the first draft.
-    # This is a straightforward LLM call — no tools, no structured output.
-    proposal_text = generate_proposal(
+    # Call the proposal agent functions directly.
+    proposal = generate_proposal(
         profile=profile,
         project_title=request.project_title,
         project_description=request.project_description,
-        budget_or_rate=request.budget_or_rate,
         matching_skills=request.matching_skills,
         missing_skills=request.missing_skills,
     )
 
-    return {"proposal": proposal_text}
+    return {"proposal": proposal}
 
 
 # ==================================================
@@ -211,13 +215,14 @@ def get_proposal(
 
 class ChatMessage(BaseModel):
     """A single message in the conversation history."""
-    role: str   # "user" or "assistant"
+    role: str
     content: str
 
 
 class ProposalChatRequest(BaseModel):
     """
     The frontend sends the full conversation history on every turn.
+
     This "stateless" design means the backend doesn't need to store
     any session state — all history lives in the Streamlit session_state.
     """
@@ -240,8 +245,7 @@ def refine_proposal(
 
     Called every time the user sends a follow-up message in the chat
     window (e.g. "make it shorter", "focus on my Python experience").
-    The entire conversation history is sent each time so the LLM
-    always has full context of what has been asked before.
+    Always receives the full conversation history for proper context.
     """
     user = get_user(session, user_id)
     if not user:
@@ -249,20 +253,19 @@ def refine_proposal(
 
     profile = load_agent_profile(user_id, session)
 
-    # Convert Pydantic message objects to plain dicts for the agent
-    messages_as_dicts = [
-        {"role": msg.role, "content": msg.content}
-        for msg in request.messages
+    messages = [
+        {"role": message.role, "content": message.content}
+        for message in request.messages
     ]
 
-    reply = chat_with_proposal(
+    response = chat_with_proposal(
         profile=profile,
         project_title=request.project_title,
         project_description=request.project_description,
-        messages=messages_as_dicts,
+        messages=messages,
     )
 
-    return {"reply": reply}
+    return {"reply": response}
 
 
 # ==================================================
@@ -271,26 +274,143 @@ def refine_proposal(
 
 @router.post("/certifications")
 def get_certification_recommendations(
-    user_id: int = Depends(get_current_user_id),
-    session: Session = Depends(get_session),
+    offset: int = Query(
+        default=0,
+        ge=0,
+    ),
+    limit: int = Query(
+        default=10,
+        ge=1,
+        le=10,
+    ),
+    user_id: int = Depends(
+        get_current_user_id
+    ),
+    session: Session = Depends(
+        get_session
+    ),
 ):
-    user = get_user(session, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = get_user(
+        session,
+        user_id,
+    )
 
-    profile = load_agent_profile(user_id, session)
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
+    profile = load_agent_profile(
+        user_id,
+        session,
+    )
 
     state = {
         "user_id": str(user_id),
-        "query": "Recommend certifications based on my profile",
+        "query": (
+            "Recommend certifications "
+            "based on my full professional profile"
+        ),
         "user_profile": profile,
+        "offset": offset,
+        "limit": limit,
     }
 
-    result = recommend_certifications(state)
+    result = recommend_certifications(
+        state
+    )
 
     return {
-        "recommendations": result.get("certifications", []),
-        "analysis": result.get("certification_analysis", ""),
+        "recommendations":
+            result.get(
+                "certifications",
+                [],
+            ),
+        "pagination":
+            result.get(
+                "pagination",
+                {},
+            ),
+        "analysis":
+            result.get(
+                "certification_analysis",
+                "",
+            ),
+    }
+
+
+@router.get("/certifications/search")
+def search_any_certification(
+    query: str = Query(min_length=1, max_length=200),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=10, ge=1, le=10),
+    user_id: int = Depends(get_current_user_id),
+    session: Session = Depends(get_session),
+):
+    if not get_user(session, user_id):
+        raise HTTPException(status_code=404, detail="User not found")
+
+    query = query.strip()
+    if not query:
+        raise HTTPException(
+            status_code=422,
+            detail="Enter a certification search.",
+        )
+
+    try:
+        # Manual search uses no profile, recommendation filter, or LLM.
+        matches = search_certifications(query, include_retired=True)
+    except Exception:
+        logger.exception("Manual certification search failed.")
+        raise HTTPException(
+            status_code=503,
+            detail="Certification search is temporarily unavailable.",
+        )
+
+    results = []
+    seen = set()
+
+    for exam in matches:
+        exam_id = exam.get("exam_id")
+        if (
+            not isinstance(exam_id, str)
+            or not exam_id.strip()
+            or exam_id in seen
+        ):
+            continue
+
+        seen.add(exam_id)
+        results.append({
+            "exam_id": exam_id,
+            "name": (
+                exam.get("exam_name")
+                or exam.get("certification_name")
+                or "Certification"
+            ),
+            "provider": (
+                exam.get("certifying_body")
+                or "Not available in the dataset."
+            ),
+            "exam_code": exam.get("exam_code"),
+            "url": exam.get("source_url"),
+            "lifecycle_status": exam.get("lifecycle_status"),
+        })
+
+    page = results[offset:offset + limit]
+    next_offset = offset + len(page)
+    has_more = bool(page) and next_offset < len(results)
+
+    return {
+        "certifications": page,
+        "pagination": {
+            "offset": offset,
+            "limit": limit,
+            "total": len(results),
+            "returned": len(page),
+            "has_more": has_more,
+            "next_offset": next_offset if has_more else None,
+        },
     }
 
 
