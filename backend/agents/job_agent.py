@@ -5,10 +5,8 @@ from backend.graph.state import CareerState
 from backend.config import settings
 from backend.tools.job_search import search_jobs
 from backend.tools.onet import get_occupation_information
+from backend.guardrails.job_guardrails import validate_job_analysis
 from backend.tools.resume import get_required_skills
-<<<<<<< HEAD
-from backend.guardrails.job_guardrails import validate_job_analysis 
-=======
 from backend.schemas.career_response import (
     JobOpportunity,
     MatchDetails,
@@ -17,7 +15,6 @@ from pydantic import BaseModel, Field
 import re
 from difflib import SequenceMatcher
 
->>>>>>> origin/main
 
 # ---------------------------------
 # Structured output for job matching
@@ -558,16 +555,6 @@ The final result must focus on REAL JOB OPPORTUNITIES.
 
     jobs = deduplicate_jobs(jobs)
 
-<<<<<<< HEAD
-    validated_output = validate_job_analysis(
-        final_response.content
-    )
-
-    return {
-        "job_analysis": validated_output,
-        "jobs": jobs,
-    } 
-=======
     # ---------------------------------
     # FALLBACK SEARCH
     # ---------------------------------
@@ -822,14 +809,19 @@ Rules:
         ),
         reverse=True,
     )
+    job_analysis = (
+        f"Found {len(matched_jobs)} "
+        f"active job listing(s)."
+    )
+
+    validated_analysis = validate_job_analysis(
+        job_analysis
+    )
+
     return {
-        "job_analysis": (
-            f"Found {len(matched_jobs)} "
-            f"active job listing(s)."
-        ),
+        "job_analysis": validated_analysis,
         "jobs": [
             job.model_dump()
             for job in matched_jobs
         ],
     }
->>>>>>> origin/main

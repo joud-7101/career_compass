@@ -8,6 +8,7 @@ from backend.tools.freelance.freelancer_api import (
 )
 from backend.tools.freelance.freelance_search import search_freelance_projects
 from pydantic import BaseModel, Field
+from backend.guardrails.freelance_guardrails import validate_freelance_projects
 
 from backend.schemas.career_response import FreelanceProject
 
@@ -123,6 +124,11 @@ Never invent URLs or project information.
 """
 
     response = structured_llm.invoke(prompt)
+
+    validated_projects = validate_freelance_projects(
+        response.freelance_projects
+    )
+
     return {
-    "freelance_projects": response.freelance_projects
-}
+        "freelance_projects": validated_projects
+    }

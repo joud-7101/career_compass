@@ -5,6 +5,7 @@ from langchain_openai import ChatOpenAI
 
 from backend.graph.state import CareerState
 from backend.config import settings
+from backend.guardrails.certification_guardrails import validate_certification_analysis
 
 
 llm = ChatOpenAI(
@@ -73,8 +74,12 @@ Return:
 
     response = structured_llm.invoke(prompt)
 
+    validated_analysis = validate_certification_analysis(
+        response.analysis
+    )
+
     return {
-        "certification_analysis": response.analysis,
+        "certification_analysis": validated_analysis,
         "certifications": [
             certification.model_dump()
             for certification in response.certifications
