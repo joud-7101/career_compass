@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 import requests
 import streamlit as st
 
@@ -254,7 +254,7 @@ def show_proposal_dialog(project_index: int, project: dict):
     )
 
     if user_input:
-        # 1. Append the user''s message to the history immediately
+        # 1. Append the user's message to the history immediately
         #    so it appears in the chat window right away
         chat_history.append({"role": "user", "content": user_input})
         st.session_state[chat_key] = chat_history
@@ -280,9 +280,13 @@ def show_proposal_dialog(project_index: int, project: dict):
 
                 if resp.status_code == 200:
                     reply = resp.json().get("reply", "")
-                    # 3. Append the AI''s reply and rerun so the UI updates
+                    # 3. Append the AI's reply, restore the dialog flag so
+                    #    the dialog re-opens after rerun, then rerun.
                     chat_history.append({"role": "assistant", "content": reply})
                     st.session_state[chat_key] = chat_history
+                    # Re-set the flag BEFORE rerun so Streamlit re-opens
+                    # the dialog on the next render cycle.
+                    st.session_state["open_proposal_for"] = project_index
                     st.rerun()
                 else:
                     st.error(f"Could not get a reply (error {resp.status_code}). Please try again.")
@@ -305,11 +309,16 @@ if not projects and not analysis:
 # This flag is set when the user clicks "View Proposal" on a card.
 # We open the dialog BEFORE rendering the cards so Streamlit can
 # display it as a modal overlay on top of the card grid.
-open_for = st.session_state.get("open_proposal_for")
+#
+# IMPORTANT: We do NOT pop the flag here. The dialog function itself
+# re-sets the flag before calling st.rerun() when the user sends a
+# chat message, so the dialog survives the rerun and stays open.
+# The flag is only cleared when Streamlit naturally closes the dialog
+# (i.e. the user clicks X or clicks outside), because in that case
+# no rerun is triggered by our code, so the flag is never restored.
+open_for = st.session_state.pop("open_proposal_for", None)
 if open_for is not None and projects and open_for < len(projects):
     show_proposal_dialog(open_for, projects[open_for])
-    # Clear the flag so the dialog does not re-open on next rerun
-    st.session_state.pop("open_proposal_for", None)
 
 if projects:
     # Render in pairs (2-column grid)

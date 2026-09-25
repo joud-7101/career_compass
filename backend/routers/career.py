@@ -283,6 +283,7 @@ def get_proposal(
         profile=profile,
         project_title=request.project_title,
         project_description=request.project_description,
+        budget_or_rate=request.budget_or_rate,
         matching_skills=request.matching_skills,
         missing_skills=request.missing_skills,
     )

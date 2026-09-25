@@ -1,4 +1,4 @@
-﻿# API + Frontend
+# API + Frontend
 fastapi
 uvicorn[standard]
 streamlit
@@ -29,11 +29,7 @@ PyMuPDF
 # Authentication
 pwdlib[argon2]
 PyJWT
-<<<<<<< HEAD
-python-multipart 
-email-validator 
-guardrails-ai
-=======
+python-multipart
 email-validator
 
 # Job Search
@@ -42,8 +38,7 @@ numpy==1.26.3
 pandas==2.2.3
 
 # Other Project Dependencies
-apify-client
+freelancersdk
 datasets
 instructor>=1.17.0
 ragas==0.3.9
->>>>>>> origin/main
