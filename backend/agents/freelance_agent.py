@@ -20,7 +20,7 @@ class FreelancerAgentOutput(BaseModel):#for the structured output of the freelan
 
 
 llm = ChatOpenAI(
-    model="gpt-5.4-mini",
+    model="gpt-4.1-mini",
     temperature=0,
     api_key=settings.openai_api_key,
 )
