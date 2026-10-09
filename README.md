@@ -174,13 +174,4 @@ career-compass/
 └── .env                 # Secret keys (excluded from git)
 ```
 
----
 
-## Limitations & Known Issues
-
-- **SQLite only** — The project uses a local SQLite database. It is not suitable for multi-user production deployments without switching to PostgreSQL.
-- **No async agents** — The LangGraph agent graph runs synchronously, which can cause the API to block on long-running queries.
-- **Freelancer API rate limits** — The Freelancer SDK may hit rate limits during heavy use.
-- **python-jobspy version pinned** — `python-jobspy==1.1.82` and `numpy==1.26.3` are pinned due to compatibility; upgrading may break job scraping.
-- **LangSmith is optional** — If `LANGSMITH_API_KEY` is not set, tracing is disabled but the app still works.
-- **Resume parsing accuracy** — CV extraction quality depends on the PDF formatting; scanned or image-based PDFs may not parse correctly.
